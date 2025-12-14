@@ -1,0 +1,9 @@
+export type Id = string
+export type Session = { id: Id }
+export type Message = { role: 'user' | 'assistant' | 'tool'; content: string; tool?: string }
+export type ToolCall = { name: string; args: Record<string, unknown> }
+export type SubAgent = { name: string; description: string; enabled: boolean }
+export type ParameterPreset = { id: Id; name: string; data: Record<string, unknown> }
+export type PromptTemplateVersion = { id: Id; templateId: Id; version: number; variables: Record<string, string>; content: string; createdAt: string }
+export type KBSource = { id: Id; name: string; type: 'folder' | 'http' | 'markdown'; config: Record<string, unknown> }
+export type KBRecord = { id: Id; sourceId: Id; preview: string; link?: string; score?: number }

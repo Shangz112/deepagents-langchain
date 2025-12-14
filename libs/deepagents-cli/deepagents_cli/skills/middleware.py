@@ -25,7 +25,7 @@ Example structure:
 
 from collections.abc import Awaitable, Callable
 from pathlib import Path
-from typing import NotRequired, TypedDict, cast
+from typing import TypedDict, cast
 
 from langchain.agents.middleware.types import (
     AgentMiddleware,
@@ -38,10 +38,10 @@ from langgraph.runtime import Runtime
 from deepagents_cli.skills.load import SkillMetadata, list_skills
 
 
-class SkillsState(AgentState):
+class SkillsState(AgentState, total=False):
     """State for the skills middleware."""
 
-    skills_metadata: NotRequired[list[SkillMetadata]]
+    skills_metadata: list[SkillMetadata]
     """List of loaded skill metadata (name, description, path)."""
 
 

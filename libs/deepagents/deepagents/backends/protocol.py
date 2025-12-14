@@ -7,7 +7,7 @@ database, etc.) and provide a uniform interface for file operations.
 
 from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Any, Literal, NotRequired, Protocol, TypeAlias, runtime_checkable
+from typing import Any, Literal, Protocol, TypeAlias, runtime_checkable
 
 from langchain.tools import ToolRuntime
 from typing_extensions import TypedDict
@@ -83,17 +83,20 @@ class FileUploadResponse:
     error: FileOperationError | None = None
 
 
-class FileInfo(TypedDict):
+class FileInfoRequired(TypedDict):
+    path: str
+
+
+class FileInfo(FileInfoRequired, total=False):
     """Structured file listing info.
 
     Minimal contract used across backends. Only "path" is required.
     Other fields are best-effort and may be absent depending on backend.
     """
 
-    path: str
-    is_dir: NotRequired[bool]
-    size: NotRequired[int]  # bytes (approx)
-    modified_at: NotRequired[str]  # ISO timestamp if known
+    is_dir: bool
+    size: int  # bytes (approx)
+    modified_at: str  # ISO timestamp if known
 
 
 class GrepMatch(TypedDict):

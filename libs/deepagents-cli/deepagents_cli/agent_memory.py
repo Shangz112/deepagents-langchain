@@ -2,7 +2,7 @@
 
 import contextlib
 from collections.abc import Awaitable, Callable
-from typing import NotRequired, TypedDict, cast
+from typing import TypedDict, cast
 
 from langchain.agents.middleware.types import (
     AgentMiddleware,
@@ -15,23 +15,23 @@ from langgraph.runtime import Runtime
 from deepagents_cli.config import Settings
 
 
-class AgentMemoryState(AgentState):
+class AgentMemoryState(AgentState, total=False):
     """State for the agent memory middleware."""
 
-    user_memory: NotRequired[str]
+    user_memory: str
     """Personal preferences from ~/.deepagents/{agent}/ (applies everywhere)."""
 
-    project_memory: NotRequired[str]
+    project_memory: str
     """Project-specific context (loaded from project root)."""
 
 
-class AgentMemoryStateUpdate(TypedDict):
+class AgentMemoryStateUpdate(TypedDict, total=False):
     """A state update for the agent memory middleware."""
 
-    user_memory: NotRequired[str]
+    user_memory: str
     """Personal preferences from ~/.deepagents/{agent}/ (applies everywhere)."""
 
-    project_memory: NotRequired[str]
+    project_memory: str
     """Project-specific context (loaded from project root)."""
 
 

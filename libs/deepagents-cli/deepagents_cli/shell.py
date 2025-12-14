@@ -23,6 +23,7 @@ class ShellMiddleware(AgentMiddleware[AgentState, Any]):
         self,
         *,
         workspace_root: str,
+        display_root: str | None = None,
         timeout: float = 120.0,
         max_output_bytes: int = 100_000,
         env: dict[str, str] | None = None,
@@ -31,6 +32,7 @@ class ShellMiddleware(AgentMiddleware[AgentState, Any]):
 
         Args:
             workspace_root: Working directory for shell commands.
+            display_root: Directory path to show in tool description (defaults to workspace_root).
             timeout: Maximum time in seconds to wait for command completion.
                 Defaults to 120 seconds.
             max_output_bytes: Maximum number of bytes to capture from command output.
@@ -46,9 +48,10 @@ class ShellMiddleware(AgentMiddleware[AgentState, Any]):
         self._workspace_root = workspace_root
 
         # Build description with working directory information
+        display_path = display_root if display_root is not None else workspace_root
         description = (
             f"Execute a shell command directly on the host. Commands will run in "
-            f"the working directory: {workspace_root}. Each command runs in a fresh shell "
+            f"the working directory: {display_path}. Each command runs in a fresh shell "
             f"environment with the current process's environment variables. Commands may "
             f"be truncated if they exceed the configured timeout or output limits."
         )

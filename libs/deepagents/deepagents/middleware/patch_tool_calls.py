@@ -41,4 +41,7 @@ class PatchToolCallsMiddleware(AgentMiddleware):
                             )
                         )
 
+        if len(patched_messages) == len(messages):
+            return None
+
         return {"messages": Overwrite(patched_messages)}
