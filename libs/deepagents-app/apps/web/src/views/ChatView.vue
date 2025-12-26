@@ -131,8 +131,9 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted, computed } from 'vue'
+import { ref, reactive, onMounted, onUnmounted, computed } from 'vue'
 import axios from 'axios'
+import { sessionStore } from '../store'
 import MessageList from '../components/chat/MessageList.vue'
 import Composer from '../components/chat/Composer.vue'
 import PlanGraph from './PlanGraph.vue'
@@ -142,6 +143,7 @@ const activeTab = ref('Chat')
 const sessionId = ref<string | null>(null)
 const sessionError = ref<boolean>(false)
 const messages = ref<any[]>([])
+let currentEventSource: EventSource | null = null
 
 const tabs = [
   { id: 'Chat', label: 'Chat', icon: 'message-square' },
@@ -196,6 +198,13 @@ function getStatusBadgeClass(status: string) {
 
 onMounted(() => ensureSession())
 
+onMounted(() => {
+  if (currentEventSource) {
+    currentEventSource.close()
+    currentEventSource = null
+  }
+})
+
 async function ensureSession(retryCount = 0) {
   if (sessionId.value) return
 
@@ -203,6 +212,7 @@ async function ensureSession(retryCount = 0) {
   try {
     const r = await axios.post('/api/v1/chat/sessions')
     sessionId.value = r.data.id
+    sessionStore.setSessionId(r.data.id)
     sessionError.value = false
   } catch (e) {
     console.error('Failed to init session', e)
@@ -248,7 +258,11 @@ async function onSend(payload: { text: string; tools: boolean; template?: any; f
     })
 
     // Start SSE
+    if (currentEventSource) {
+        currentEventSource.close()
+    }
     const es = new EventSource(`/api/v1/chat/sessions/${sessionId.value}/stream`)
+    currentEventSource = es
     
     // Create placeholder for assistant message
     const assistantMsgId = String(Date.now() + 1)
@@ -285,13 +299,22 @@ async function onSend(payload: { text: string; tools: boolean; template?: any; f
           // Check if event exists
           const existingIdx = assistantMsg.toolEvents.findIndex((evt: any) => evt.id === d.id)
           if (existingIdx >= 0) {
-             Object.assign(assistantMsg.toolEvents[existingIdx], d)
+             if (d.input_chunk) {
+                const current = assistantMsg.toolEvents[existingIdx].input
+                if (typeof current === 'string') {
+                    assistantMsg.toolEvents[existingIdx].input = current + d.input_chunk
+                } else {
+                    assistantMsg.toolEvents[existingIdx].input = d.input_chunk
+                }
+             } else {
+                Object.assign(assistantMsg.toolEvents[existingIdx], d)
+             }
           } else {
              assistantMsg.toolEvents.push({
                id: d.id,
                name: d.name,
                status: d.status,
-               input: d.input,
+               input: d.input || d.input_chunk || '',
                output: d.output,
                timestamp: Date.now()
              })
@@ -301,6 +324,9 @@ async function onSend(payload: { text: string; tools: boolean; template?: any; f
         if (d.type === 'done') {
           assistantMsg.streaming = false
           es.close()
+          if (currentEventSource === es) {
+            currentEventSource = null
+          }
         }
       } catch (err) {
         console.error('SSE Parse Error', err)
@@ -311,12 +337,16 @@ async function onSend(payload: { text: string; tools: boolean; template?: any; f
        // Only treat as error if we haven't finished properly and connection is truly closed
        if (es.readyState === EventSource.CLOSED) {
           if (assistantMsg.streaming) {
-              console.error('SSE Error', e)
+              // Suppress console error for expected aborts
+              console.warn('SSE Connection closed unexpectedly')
               assistantMsg.streaming = false
               if (!assistantMsg.content && !assistantMsg.reasoning) {
                    assistantMsg.content = "Error: Connection interrupted. Please try again."
                    assistantMsg.isError = true
               }
+          }
+          if (currentEventSource === es) {
+             currentEventSource = null
           }
        }
     }

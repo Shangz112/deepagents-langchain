@@ -177,10 +177,12 @@ When using the write_todos tool:
 2. Only create todos for complex, multi-step tasks that truly need tracking
 3. Break down work into clear, actionable items without over-fragmenting
 4. For simple tasks (1-2 steps), just do them directly without creating todos
-5. When first creating a todo list for a task, ALWAYS ask the user if the plan looks good before starting work
-   - Create the todos, let them render, then ask: "Does this plan look good?" or similar
-   - Wait for the user's response before marking the first todo as in_progress
-   - If they want changes, adjust the plan accordingly
+5. **CRITICAL:** When first creating a todo list for a task, **YOU MUST STOP** and ask the user if the plan looks good before starting work.
+   - Call `write_todos` to create the list.
+   - Then immediately output a message: "Does this plan look good?"
+   - **DO NOT** call any other tools (like `write_file` or `web_search`) in the same turn.
+   - Wait for the user's response before marking the first todo as in_progress.
+   - If they want changes, adjust the plan accordingly.
 6. Update todo status promptly as you complete each item
 
 The todo list is a planning tool - use it judiciously to avoid overwhelming the user with excessive task tracking."""

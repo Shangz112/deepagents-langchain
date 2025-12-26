@@ -7,7 +7,7 @@
           <Icon name="book-open" size="18" class="text-[var(--accent-primary)]" />
           Prompt Templates
         </span>
-        <button class="btn btn-sm btn-secondary gap-1.5">
+        <button class="btn btn-sm btn-secondary gap-1.5" @click="createNew">
           <Icon name="plus" size="14" />
           New
         </button>
@@ -17,7 +17,7 @@
         <div v-for="t in templates" :key="t.id" 
              class="p-3 rounded-lg border transition-all cursor-pointer group relative"
              :class="selectedId === t.id ? 'bg-[var(--accent-surface)] border-[var(--accent-primary)]/50 shadow-sm' : 'bg-[var(--bg-surface)] border-[var(--border-subtle)] hover:border-[var(--border-active)]'"
-             @click="selectedId = t.id">
+             @click="selectTemplate(t)">
           
           <div class="flex justify-between items-start mb-1">
             <div class="font-medium text-sm" :class="selectedId === t.id ? 'text-[var(--accent-primary)]' : 'text-[var(--fg-primary)]'">{{ t.name }}</div>
@@ -38,16 +38,16 @@
     <div class="flex flex-col h-full overflow-hidden relative">
       <!-- Toolbar -->
       <div class="h-[56px] border-b border-[var(--border-subtle)] bg-[var(--bg-panel)]/50 backdrop-blur-sm flex justify-between items-center px-6">
-        <div class="flex items-center gap-3">
-          <h3 class="font-bold text-[var(--fg-primary)]">{{ selectedTemplate?.name || 'Select a template' }}</h3>
-          <span class="text-xs px-2 py-0.5 rounded-full bg-[var(--accent-surface)] text-[var(--accent-primary)] border border-[var(--accent-primary)]/20">Edited</span>
+        <div class="flex items-center gap-3 flex-1 mr-4">
+          <input v-model="name" class="font-bold text-[var(--fg-primary)] bg-transparent border-none outline-none w-full placeholder-[var(--fg-tertiary)]" placeholder="Enter template name..." />
+          <span class="text-xs px-2 py-0.5 rounded-full bg-[var(--accent-surface)] text-[var(--accent-primary)] border border-[var(--accent-primary)]/20 whitespace-nowrap">Edited</span>
         </div>
         <div class="flex gap-3">
           <button class="btn btn-sm btn-ghost gap-2">
             <Icon name="refresh-cw" size="14" />
             History
           </button>
-          <button class="btn btn-sm btn-primary gap-2">
+          <button class="btn btn-sm btn-primary gap-2" @click="save">
             <Icon name="save" size="14" />
             Save Changes
           </button>
@@ -98,20 +98,50 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import Icon from '../components/common/Icon.vue'
+import { promptStore } from '../store'
 
-const selectedId = ref('1')
-const content = ref('You are a helpful assistant specialized in software engineering.\n\nUser Context:\n{{context}}\n\nUser Request:\n{{input}}\n\nResponse:')
+const selectedId = ref<string | null>(null)
+const content = ref('')
+const name = ref('')
+const desc = ref('')
 
-const templates = ref([
-  { id: '1', name: 'General Assistant', desc: 'Base conversational agent with context awareness.', version: '1.0.2', updated: '10m ago' },
-  { id: '2', name: 'Code Generator', desc: 'Optimized for Python/TypeScript generation with best practices.', version: '2.1.0', updated: '2h ago' },
-  { id: '3', name: 'Weekly Report', desc: 'Summarizes git commits and tasks into a structured report.', version: '0.9.beta', updated: '1d ago' },
-  { id: '4', name: 'Bug Analyzer', desc: 'Analyzes error logs and suggests fixes.', version: '1.1.0', updated: '3d ago' },
-])
+onMounted(async () => {
+  await promptStore.loadPrompts()
+  if (promptStore.prompts.length > 0) {
+    selectTemplate(promptStore.prompts[0])
+  }
+})
 
-const selectedTemplate = computed(() => templates.value.find(t => t.id === selectedId.value))
+function selectTemplate(t: any) {
+  selectedId.value = t.id
+  content.value = t.content || ''
+  name.value = t.name
+  desc.value = t.desc
+}
+
+function createNew() {
+  selectedId.value = null
+  content.value = ''
+  name.value = 'New Prompt'
+  desc.value = 'Description here...'
+}
+
+async function save() {
+  const p = {
+    id: selectedId.value,
+    name: name.value,
+    desc: desc.value,
+    content: content.value,
+    version: '1.0'
+  }
+  const newId = await promptStore.savePrompt(p)
+  selectedId.value = newId
+}
+
+const templates = computed(() => promptStore.prompts)
+const selectedTemplate = computed(() => templates.value.find((t: any) => t.id === selectedId.value))
 
 const extractedVars = computed(() => {
   const matches = content.value.match(/{{([^}]+)}}/g)
