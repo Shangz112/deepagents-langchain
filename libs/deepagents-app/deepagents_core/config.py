@@ -17,8 +17,8 @@ dotenv.load_dotenv()
 # CRITICAL: Override LANGSMITH_PROJECT to route agent traces to separate project
 # LangSmith reads LANGSMITH_PROJECT at invocation time, so we override it here
 # and preserve the user's original value for shell commands
-_deepagents_project = os.environ.get("DEEPAGENTS_LANGSMITH_PROJECT", "deepagents")
-_original_langsmith_project = os.environ.get("LANGSMITH_PROJECT", "default")
+_deepagents_project = os.environ.get("DEEPAGENTS_LANGSMITH_PROJECT")
+_original_langsmith_project = os.environ.get("LANGSMITH_PROJECT")
 if _deepagents_project:
     # Override LANGSMITH_PROJECT for agent traces
     os.environ["LANGSMITH_PROJECT"] = _deepagents_project
@@ -128,10 +128,6 @@ def _find_project_agent_md(project_root: Path) -> list[Path]:
     return paths
 
 
-
-DEFAULT_MODEL_PROVIDER = "siliconflow"
-DEFAULT_MODEL_NAME = "deepseek-ai/DeepSeek-V3.2"
-
 @dataclass
 class Settings:
     """Global settings and environment detection for deepagents-cli.
@@ -156,18 +152,15 @@ class Settings:
     openai_api_key: str | None
     anthropic_api_key: str | None
     google_api_key: str | None
-    siliconflow_api_key: str = DEFAULT_SILICONFLOW_KEY
-    tavily_api_key: str = DEFAULT_TAVILY_KEY
-    bocha_api_key: str = DEFAULT_BOCHA_KEY
-
+    tavily_api_key: str | None
 
     # LangSmith configuration
-    deepagents_langchain_project: str | None = None  # For deepagents agent tracing
-    user_langchain_project: str | None = None  # Original LANGSMITH_PROJECT for user code
+    deepagents_langchain_project: str | None  # For deepagents agent tracing
+    user_langchain_project: str | None  # Original LANGSMITH_PROJECT for user code
 
     # Model configuration
-    model_name: str | None = DEFAULT_MODEL_NAME  # Currently active model name
-    model_provider: str | None = DEFAULT_MODEL_PROVIDER  # Provider (openai, anthropic, google, siliconflow)
+    model_name: str | None = None  # Currently active model name
+    model_provider: str | None = None  # Provider (openai, anthropic, google)
 
     # Project information
     project_root: Path | None = None
@@ -186,9 +179,7 @@ class Settings:
         openai_key = os.environ.get("OPENAI_API_KEY")
         anthropic_key = os.environ.get("ANTHROPIC_API_KEY")
         google_key = os.environ.get("GOOGLE_API_KEY")
-        siliconflow_key = os.environ.get("SILICONFLOW_API_KEY") or DEFAULT_SILICONFLOW_KEY
-        tavily_key = os.environ.get("TAVILY_API_KEY") or DEFAULT_TAVILY_KEY
-        bocha_key = os.environ.get("BOCHA_API_KEY") or DEFAULT_BOCHA_KEY
+        tavily_key = os.environ.get("TAVILY_API_KEY")
 
         # Detect LangSmith configuration
         # DEEPAGENTS_LANGSMITH_PROJECT: Project for deepagents agent tracing
@@ -205,9 +196,7 @@ class Settings:
             openai_api_key=openai_key,
             anthropic_api_key=anthropic_key,
             google_api_key=google_key,
-            siliconflow_api_key=siliconflow_key,
             tavily_api_key=tavily_key,
-            bocha_api_key=bocha_key,
             deepagents_langchain_project=deepagents_langchain_project,
             user_langchain_project=user_langchain_project,
             project_root=project_root,
@@ -227,21 +216,11 @@ class Settings:
     def has_google(self) -> bool:
         """Check if Google API key is configured."""
         return self.google_api_key is not None
-    
-    @property
-    def has_siliconflow(self) -> bool:
-        """Check if SiliconFlow API key is configured."""
-        return self.siliconflow_api_key is not None
 
     @property
     def has_tavily(self) -> bool:
         """Check if Tavily API key is configured."""
         return self.tavily_api_key is not None
-
-    @property
-    def has_bocha(self) -> bool:
-        """Check if Bocha API key is configured."""
-        return self.bocha_api_key is not None
 
     @property
     def has_deepagents_langchain_project(self) -> bool:
@@ -437,8 +416,6 @@ def _detect_provider(model_name: str) -> str | None:
         return "anthropic"
     if "gemini" in model_lower:
         return "google"
-    if "siliconflow" in model_lower:
-        return "siliconflow"
     return None
 
 
@@ -468,7 +445,6 @@ def create_model(model_name_override: str | None = None) -> BaseChatModel:
             console.print("  - OpenAI: gpt-*, o1-*, o3-*")
             console.print("  - Anthropic: claude-*")
             console.print("  - Google: gemini-*")
-            console.print("  - SiliconFlow: deepseek-ai/DeepSeek-V3.2")
             sys.exit(1)
 
         # Check if API key for detected provider is available
@@ -487,17 +463,8 @@ def create_model(model_name_override: str | None = None) -> BaseChatModel:
                 f"[bold red]Error:[/bold red] Model '{model_name_override}' requires GOOGLE_API_KEY"
             )
             sys.exit(1)
-        elif provider == "siliconflow" and not settings.has_siliconflow:
-            console.print(
-                f"[bold red]Error:[/bold red] Model '{model_name_override}' requires SILICONFLOW_API_KEY"
-            )
-            sys.exit(1)
 
         model_name = model_name_override
-        if provider == "siliconflow":
-            model_name = DEFAULT_MODEL_NAME
-            console.print(f"[bold yellow]Warning:[/bold yellow] Using SiliconFlow model {model_name}")
-
     # Use environment variable defaults, detect provider by API key priority
     elif settings.has_openai:
         provider = "openai"
@@ -508,16 +475,12 @@ def create_model(model_name_override: str | None = None) -> BaseChatModel:
     elif settings.has_google:
         provider = "google"
         model_name = os.environ.get("GOOGLE_MODEL", "gemini-3-pro-preview")
-    elif settings.has_siliconflow:
-        provider = "siliconflow"
-        model_name = os.environ.get("SILICONFLOW_MODEL", "deepseek-ai/DeepSeek-V3")
     else:
         console.print("[bold red]Error:[/bold red] No API key configured.")
         console.print("\nPlease set one of the following environment variables:")
         console.print("  - OPENAI_API_KEY     (for OpenAI models like gpt-5-mini)")
         console.print("  - ANTHROPIC_API_KEY  (for Claude models)")
         console.print("  - GOOGLE_API_KEY     (for Google Gemini models)")
-        console.print("  - SILICONFLOW_API_KEY     (for SiliconFlow models)")
         console.print("\nExample:")
         console.print("  export OPENAI_API_KEY=your_api_key_here")
         console.print("\nOr add it to your .env file.")
@@ -543,16 +506,6 @@ def create_model(model_name_override: str | None = None) -> BaseChatModel:
         from langchain_google_genai import ChatGoogleGenerativeAI
 
         return ChatGoogleGenerativeAI(
-            model=model_name,
-            temperature=0,
-            max_tokens=None,
-        )
-    if provider == "siliconflow":
-        from langchain_openai import ChatOpenAI
-        console.print(f"[bold yellow]Warning:[/bold yellow] Using SiliconFlow model {model_name}")
-        return ChatOpenAI(
-            base_url="https://api.siliconflow.cn/v1",
-            openai_api_key=settings.siliconflow_api_key,
             model=model_name,
             temperature=0,
             max_tokens=None,

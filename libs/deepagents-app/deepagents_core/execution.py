@@ -3,15 +3,8 @@
 import asyncio
 import json
 import sys
-
-try:
-    import termios
-    import tty
-    termios_error = termios.error
-except ImportError:
-    termios = None
-    tty = None
-    termios_error = AttributeError
+import termios
+import tty
 
 from langchain.agents.middleware.human_in_the_loop import (
     ActionRequest,
@@ -163,7 +156,7 @@ def prompt_for_tool_approval(
             sys.stdout.flush()
             termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
 
-    except (termios_error, AttributeError):
+    except (termios.error, AttributeError):
         # Fallback for non-Unix systems
         console.print("  ☐ (A)pprove  (default)")
         console.print("  ☐ (R)eject")

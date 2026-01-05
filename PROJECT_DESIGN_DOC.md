@@ -1,5 +1,7 @@
 # DeepAgents 项目设计与 Subagents 机制说明文档
 
+> **快速上手**: 如果你想直接运行项目，请查看 [快速启动指南 (QUICK_START.md)](QUICK_START.md)。
+
 本文档旨在帮助开发者快速理解 DeepAgents 项目的核心设计，特别是其强大的 Subagents（子智能体）机制。
 
 ## 1. 项目概览

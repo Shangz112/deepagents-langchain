@@ -107,7 +107,6 @@ def parse_args():
     )
     parser.add_argument(
         "--model",
-        default="deepseek-ai/DeepSeek-V3.2",
         help="Model to use (e.g., claude-sonnet-4-5-20250929, gpt-5-mini, gemini-3-pro-preview). Provider is auto-detected from model name.",
     )
     parser.add_argument(
@@ -190,7 +189,6 @@ async def simple_cli(
             "openai": "OpenAI",
             "anthropic": "Anthropic",
             "google": "Google",
-            "siliconflow": "SiliconFlow",
         }.get(settings.model_provider, settings.model_provider)
         console.print(
             f"[green]✓ Model:[/green] {provider_display} → '{settings.model_name}'",
@@ -207,19 +205,6 @@ async def simple_cli(
         console.print("    export TAVILY_API_KEY=your_api_key_here", style=COLORS["dim"])
         console.print(
             "  Or add it to your .env file. Get your key at: https://tavily.com",
-            style=COLORS["dim"],
-        )
-        console.print()
-
-    if not settings.has_bocha:
-        console.print(
-            "[yellow]⚠ Code execution disabled:[/yellow] BOCHA_API_KEY not found.",
-            style=COLORS["dim"],
-        )
-        console.print("  To enable code execution, set your Bocha API key:", style=COLORS["dim"])
-        console.print("    export BOCHA_API_KEY=your_api_key_here", style=COLORS["dim"])
-        console.print(
-            "  Or add it to your .env file. Get your key at: https://bocha.ai",
             style=COLORS["dim"],
         )
         console.print()

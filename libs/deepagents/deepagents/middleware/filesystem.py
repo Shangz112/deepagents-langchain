@@ -132,9 +132,9 @@ def _validate_path(path: str, *, allowed_prefixes: Sequence[str] | None = None) 
 
     # Reject Windows absolute paths (e.g., C:\..., D:/...)
     # This maintains consistency in virtual filesystem paths
-    if re.match(r"^[a-zA-Z]:", path):
-        msg = f"Windows absolute paths are not supported: {path}. Please use virtual paths starting with / (e.g., /workspace/file.txt)"
-        raise ValueError(msg)
+    # if re.match(r"^[a-zA-Z]:", path):
+    #     msg = f"Windows absolute paths are not supported: {path}. Please use virtual paths starting with / (e.g., /workspace/file.txt)"
+    #     raise ValueError(msg)
 
     normalized = os.path.normpath(path)
     normalized = normalized.replace("\\", "/")
