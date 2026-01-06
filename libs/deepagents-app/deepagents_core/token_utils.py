@@ -4,7 +4,7 @@ from pathlib import Path
 
 from langchain_core.messages import SystemMessage
 
-from deepagents_cli.config import console, settings
+from deepagents_core.config import console, settings
 
 
 def calculate_baseline_tokens(model, agent_dir: Path, system_prompt: str, assistant_id: str) -> int:

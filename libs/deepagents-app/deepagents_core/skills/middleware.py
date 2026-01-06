@@ -35,7 +35,7 @@ from langchain.agents.middleware.types import (
 )
 from langgraph.runtime import Runtime
 
-from deepagents_cli.skills.load import SkillMetadata, list_skills
+from deepagents_core.skills.load import SkillMetadata, list_skills
 
 
 class SkillsState(AgentState):

@@ -11,8 +11,8 @@ import re
 from pathlib import Path
 from typing import Any
 
-from deepagents_cli.config import COLORS, Settings, console
-from deepagents_cli.skills.load import MAX_SKILL_NAME_LENGTH, list_skills
+from deepagents_core.config import COLORS, Settings, console
+from deepagents_core.skills.load import MAX_SKILL_NAME_LENGTH, list_skills
 
 
 def _validate_name(name: str) -> tuple[bool, str]:

@@ -6,7 +6,7 @@ import requests
 from markdownify import markdownify
 from tavily import TavilyClient
 
-from deepagents_cli.config import settings
+from deepagents_core.config import settings
 
 # Initialize Tavily client if API key is available
 tavily_client = TavilyClient(api_key=settings.tavily_api_key) if settings.has_tavily else None

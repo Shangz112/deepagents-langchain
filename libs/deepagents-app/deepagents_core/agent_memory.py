@@ -12,7 +12,7 @@ from langchain.agents.middleware.types import (
 )
 from langgraph.runtime import Runtime
 
-from deepagents_cli.config import Settings
+from deepagents_core.config import Settings
 
 
 class AgentMemoryState(AgentState):

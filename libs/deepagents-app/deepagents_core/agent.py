@@ -19,11 +19,11 @@ from langgraph.checkpoint.memory import InMemorySaver
 from langgraph.pregel import Pregel
 from langgraph.runtime import Runtime
 
-from deepagents_cli.agent_memory import AgentMemoryMiddleware
-from deepagents_cli.config import COLORS, config, console, get_default_coding_instructions, settings
-from deepagents_cli.integrations.sandbox_factory import get_default_working_dir
-from deepagents_cli.shell import ShellMiddleware
-from deepagents_cli.skills import SkillsMiddleware
+from deepagents_core.agent_memory import AgentMemoryMiddleware
+from deepagents_core.config import COLORS, config, console, get_default_coding_instructions, settings
+from deepagents_core.integrations.sandbox_factory import get_default_working_dir
+from deepagents_core.shell import ShellMiddleware
+from deepagents_core.skills import SkillsMiddleware
 
 
 def list_agents() -> None:

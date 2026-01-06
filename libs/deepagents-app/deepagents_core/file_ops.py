@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING, Any, Literal
 
 from deepagents.backends.utils import perform_string_replacement
 
-from deepagents_cli.config import settings
+from deepagents_core.config import settings
 
 if TYPE_CHECKING:
     from deepagents.backends.protocol import BACKEND_TYPES

@@ -3,8 +3,14 @@
 import asyncio
 import json
 import sys
-import termios
-import tty
+try:
+    import termios
+    import tty
+    termios_error = termios.error
+except ImportError:
+    termios = None
+    tty = None
+    termios_error = AttributeError
 
 from langchain.agents.middleware.human_in_the_loop import (
     ActionRequest,
@@ -21,11 +27,11 @@ from rich import box
 from rich.markdown import Markdown
 from rich.panel import Panel
 
-from deepagents_cli.config import COLORS, console
-from deepagents_cli.file_ops import FileOpTracker, build_approval_preview
-from deepagents_cli.image_utils import create_multimodal_content
-from deepagents_cli.input import ImageTracker, parse_file_mentions
-from deepagents_cli.ui import (
+from deepagents_core.config import COLORS, console
+from deepagents_core.file_ops import FileOpTracker, build_approval_preview
+from deepagents_core.image_utils import create_multimodal_content
+from deepagents_core.input import ImageTracker, parse_file_mentions
+from deepagents_core.ui import (
     TokenTracker,
     format_tool_display,
     format_tool_message_content,
@@ -156,7 +162,7 @@ def prompt_for_tool_approval(
             sys.stdout.flush()
             termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
 
-    except (termios.error, AttributeError):
+    except (termios_error, AttributeError):
         # Fallback for non-Unix systems
         console.print("  ☐ (A)pprove  (default)")
         console.print("  ☐ (R)eject")

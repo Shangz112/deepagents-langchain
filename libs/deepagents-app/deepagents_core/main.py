@@ -9,11 +9,11 @@ from pathlib import Path
 from deepagents.backends.protocol import SandboxBackendProtocol
 
 # Now safe to import agent (which imports LangChain modules)
-from deepagents_cli.agent import create_cli_agent, list_agents, reset_agent
-from deepagents_cli.commands import execute_bash_command, handle_command
+from deepagents_core.agent import create_cli_agent, list_agents, reset_agent
+from deepagents_core.commands import execute_bash_command, handle_command
 
 # CRITICAL: Import config FIRST to set LANGSMITH_PROJECT before LangChain loads
-from deepagents_cli.config import (
+from deepagents_core.config import (
     COLORS,
     DEEP_AGENTS_ASCII,
     SessionState,
@@ -21,15 +21,15 @@ from deepagents_cli.config import (
     create_model,
     settings,
 )
-from deepagents_cli.execution import execute_task
-from deepagents_cli.input import ImageTracker, create_prompt_session
-from deepagents_cli.integrations.sandbox_factory import (
+from deepagents_core.execution import execute_task
+from deepagents_core.input import ImageTracker, create_prompt_session
+from deepagents_core.integrations.sandbox_factory import (
     create_sandbox,
     get_default_working_dir,
 )
-from deepagents_cli.skills import execute_skills_command, setup_skills_parser
-from deepagents_cli.tools import fetch_url, http_request, web_search
-from deepagents_cli.ui import TokenTracker, show_help
+from deepagents_core.skills import execute_skills_command, setup_skills_parser
+from deepagents_core.tools import fetch_url, http_request, web_search
+from deepagents_core.ui import TokenTracker, show_help
 
 
 def check_cli_dependencies() -> None:

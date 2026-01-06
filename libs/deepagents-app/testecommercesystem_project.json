@@ -1,0 +1,133 @@
+{
+  "name": "TestEcommerceSystem",
+  "created_at": "2026-01-06T03:08:19.599136",
+  "updated_at": "2026-01-06T03:08:19.599136",
+  "requirements": {
+    "REQ-001": {
+      "id": "REQ-001",
+      "title": "User Login Function",
+      "description": "Users can login to system using username and password",
+      "type": "functional",
+      "priority": "high",
+      "parent_id": null,
+      "status": "draft",
+      "testable": true,
+      "trace_to": []
+    },
+    "REQ-002": {
+      "id": "REQ-002",
+      "title": "Data Query Function",
+      "description": "Users can query data in the system",
+      "type": "functional",
+      "priority": "high",
+      "parent_id": null,
+      "status": "draft",
+      "testable": true,
+      "trace_to": []
+    },
+    "REQ-003": {
+      "id": "REQ-003",
+      "title": "System Performance Requirement",
+      "description": "System response time should not exceed 2 seconds",
+      "type": "non_functional",
+      "priority": "medium",
+      "parent_id": null,
+      "status": "draft",
+      "testable": true,
+      "trace_to": []
+    },
+    "REQ-004": {
+      "id": "REQ-004",
+      "title": "Data Security Requirement",
+      "description": "User data must be encrypted when stored",
+      "type": "non_functional",
+      "priority": "high",
+      "parent_id": null,
+      "status": "draft",
+      "testable": true,
+      "trace_to": []
+    },
+    "REQ-005": {
+      "id": "REQ-005",
+      "title": "User Management Function",
+      "description": "Administrators can manage user accounts",
+      "type": "functional",
+      "priority": "medium",
+      "parent_id": null,
+      "status": "draft",
+      "testable": true,
+      "trace_to": []
+    }
+  },
+  "components": {
+    "COMP-001": {
+      "id": "COMP-001",
+      "name": "UserInterface",
+      "type": "Web Interface",
+      "description": "User interface component",
+      "interfaces": [
+        "login()",
+        "queryData()",
+        "manageUsers()"
+      ],
+      "dependencies": [
+        "UserService",
+        "DataService"
+      ],
+      "responsibilities": [
+        "User interaction handling",
+        "Interface display"
+      ]
+    },
+    "COMP-002": {
+      "id": "COMP-002",
+      "name": "UserService",
+      "type": "Business Service",
+      "description": "User management service",
+      "interfaces": [
+        "authenticate()",
+        "manageUser()"
+      ],
+      "dependencies": [
+        "DataAccess"
+      ],
+      "responsibilities": [
+        "User authentication",
+        "User management"
+      ]
+    },
+    "COMP-003": {
+      "id": "COMP-003",
+      "name": "DataService",
+      "type": "Business Service",
+      "description": "Data query service",
+      "interfaces": [
+        "queryData()",
+        "storeData()"
+      ],
+      "dependencies": [
+        "DataAccess"
+      ],
+      "responsibilities": [
+        "Data query",
+        "Data storage"
+      ]
+    },
+    "COMP-004": {
+      "id": "COMP-004",
+      "name": "DataAccess",
+      "type": "Data Access",
+      "description": "Data access layer",
+      "interfaces": [
+        "save()",
+        "find()",
+        "update()"
+      ],
+      "dependencies": [],
+      "responsibilities": [
+        "Data persistence",
+        "Data access control"
+      ]
+    }
+  }
+}

@@ -80,6 +80,15 @@ TAVILY_API_KEY=tvly-xxx
 *   **目的**: 这允许你将 Agent 的内部思考过程（Trace）记录到一个独立的项目中（默认为 `deepagents`），而不会污染你默认的 `LANGSMITH_PROJECT`（通常用于应用层追踪）。
 *   **注意**: 这是一个推荐的最佳实践，特别是当你使用 LangSmith 进行调试时。
 
+### 3.3 系统级配置 (Shared System Config)
+如果你希望在多个 deepagents 应用（如 CLI 和未来的 App）之间共享 API Key，可以使用系统配置文件。
+
+1.  **创建配置文件目录**: `mkdir ~/.deepagents` (Windows: `mkdir C:\Users\YourName\.deepagents`)
+2.  **创建配置文件**: 将项目根目录下的 `config.example.yaml` 复制为 `~/.deepagents/config.yaml`。
+3.  **配置 API Key**: 编辑该文件填入你的 Key。
+
+系统配置文件的优先级低于环境变量（`.env`），但高于默认值。
+
 ## 4. 启动与使用 (Startup & Usage)
 
 ### 4.1 启动 CLI

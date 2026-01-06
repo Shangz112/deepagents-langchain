@@ -1,0 +1,24 @@
+# DeepAgents System Configuration
+# Copy this file to ~/.deepagents/config.yaml (Windows: C:\Users\YourName\.deepagents\config.yaml)
+# Place your API keys here to share them across deepagents-cli and deepagents-app.
+# Environment variables will override these settings.
+
+api_keys:
+  # SiliconFlow API Key (for DeepSeek etc.)
+  siliconflow: "sk-zyhbakslfsnztzpbyrmopbzvzuajofmmsedpmfrgnfpqsrfn"
+  # Tavily Search API Key
+  tavily: "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"
+  # Bocha Search API Key
+  bocha: "sk-cad437042e6e4546822cfe02959809cf"
+
+models:
+  default:
+    provider: siliconflow
+    name: MiniMaxAI/MiniMax-M2
+
+
+
+env:
+  # LangSmith Configuration
+  DEEPAGENTS_LANGSMITH_PROJECT: "deepagents-traces"
+  LANGSMITH_PROJECT: "default"

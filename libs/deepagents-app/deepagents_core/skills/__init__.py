@@ -8,11 +8,11 @@ Public API:
 All other components are internal implementation details.
 """
 
-from deepagents_cli.skills.commands import (
+from deepagents_core.skills.commands import (
     execute_skills_command,
     setup_skills_parser,
 )
-from deepagents_cli.skills.middleware import SkillsMiddleware
+from deepagents_core.skills.middleware import SkillsMiddleware
 
 __all__ = [
     "SkillsMiddleware",

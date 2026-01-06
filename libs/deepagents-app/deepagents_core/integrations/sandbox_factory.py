@@ -10,7 +10,7 @@ from pathlib import Path
 
 from deepagents.backends.protocol import SandboxBackendProtocol
 
-from deepagents_cli.config import console
+from deepagents_core.config import console
 
 
 def _run_sandbox_setup(backend: SandboxBackendProtocol, setup_script_path: str) -> None:
