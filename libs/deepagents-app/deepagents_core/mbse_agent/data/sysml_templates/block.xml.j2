@@ -1,0 +1,7 @@
+<packagedElement xmi:type="uml:Class" xmi:id="{{ uid }}" name="{{ name }}">
+  {% for prop in properties %}
+  <ownedAttribute xmi:type="uml:Property" xmi:id="{{ prop.uid }}" name="{{ prop.name }}" visibility="public">
+    <type xmi:idref="{{ prop.type_id }}"/>
+  </ownedAttribute>
+  {% endfor %}
+</packagedElement>

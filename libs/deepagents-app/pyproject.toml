@@ -20,7 +20,14 @@ dependencies = [
   "runloop-api-client>=0.69.0",
   "pillow>=10.0.0",
   "pyyaml>=6.0",
+  "lxml",
+  "jinja2",
+  "networkx",
+  "langchain-chroma",
 ]
+
+[tool.setuptools]
+packages = ["deepagents_core"]
 
 [project.scripts]
 deepagents = "deepagents_core:cli_main"
