@@ -1,0 +1,59 @@
+{
+  "vector_store": {
+    "type": "milvus",
+    "fallback_to_chroma": true,
+    "milvus": {
+      "uri": "milvus_kb.db",
+      "collection_name": "deepagents_kb",
+      "dimension": 384
+    },
+    "chroma": {
+      "collection_name": "deepagents_kb"
+    }
+  },
+  "parsing": {
+    "default_strategy": "auto",
+    "strategies": {
+      "pdf": ["mineru", "pymupdf"],
+      "docx": ["docx_text"],
+      "txt": ["text"],
+      "md": ["text"]
+    }
+  },
+  "chunking": {
+    "default": {
+      "chunk_size": 1000,
+      "chunk_overlap": 200,
+      "separators": ["\n\n", "\n", " ", ""]
+    },
+    "templates": {
+      "scientific_paper": {
+        "description": "Optimized for academic papers with dense information",
+        "chunk_size": 800,
+        "chunk_overlap": 150
+      },
+      "legal_contract": {
+        "description": "Small chunks for precise clause retrieval",
+        "chunk_size": 500,
+        "chunk_overlap": 100
+      },
+      "code_documentation": {
+        "description": "Preserves context for code blocks",
+        "chunk_size": 1500,
+        "chunk_overlap": 300
+      },
+      "technical_spec": {
+        "description": "Optimized for structured technical specs and test plans",
+        "chunk_size": 1200,
+        "chunk_overlap": 250,
+        "separators": ["\n## ", "\n### ", "\n\n", "\n", " "]
+      },
+      "structured_docx": {
+        "description": "Strict hierarchy splitting for 3-level DOCX headers",
+        "chunk_size": 1000,
+        "chunk_overlap": 200,
+        "separators": ["\n# ", "\n## ", "\n### ", "\n\n"]
+      }
+    }
+  }
+}

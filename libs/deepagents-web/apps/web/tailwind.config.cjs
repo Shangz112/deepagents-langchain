@@ -1,0 +1,1 @@
+module.exports = { content: ["./index.html", "./src/**/*.{vue,ts}"], theme: { extend: { colors: { bg: "#0b0f14", panel: "#0f172a", accent: "#7c3aed" } } } }

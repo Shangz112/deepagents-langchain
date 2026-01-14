@@ -1,0 +1,28 @@
+# DeepAgents System Configuration
+# Copy this file to ~/.deepagents/config.yaml (Windows: C:\Users\YourName\.deepagents\config.yaml)
+# Place your API keys here to share them across deepagents-cli and deepagents-app.
+# Environment variables will override these settings.
+
+api_keys:
+  # OpenAI API Key
+  # openai: "sk-..."
+
+  # Anthropic API Key
+  # anthropic: "sk-ant-..."
+
+  # Google Gemini API Key
+  # google: "..."
+
+  # SiliconFlow API Key (for DeepSeek etc.)
+  # siliconflow: "sk-..."
+
+  # Tavily Search API Key
+  # tavily: "tvly-..."
+
+  # Bocha Search API Key
+  # bocha: "sk-..."
+
+env:
+  # LangSmith Configuration
+  # DEEPAGENTS_LANGSMITH_PROJECT: "deepagents-traces"
+  # LANGSMITH_PROJECT: "default"

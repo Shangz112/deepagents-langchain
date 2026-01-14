@@ -1,0 +1,20 @@
+@startuml
+title TestEcommerceSystem - Use Case Diagram
+
+' Define actors
+actor External System
+actor Administrator
+actor User
+
+' Define use cases
+usecase "User Login Function" as UC_REQ_001
+usecase "Data Query Function" as UC_REQ_002
+usecase "User Management Function" as UC_REQ_005
+
+' Define relationships
+Administrator --> UC_REQ_005
+User --> UC_REQ_001
+User --> UC_REQ_002
+User --> UC_REQ_005
+
+@enduml

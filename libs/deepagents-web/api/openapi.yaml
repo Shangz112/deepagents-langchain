@@ -1,0 +1,166 @@
+openapi: 3.0.3
+info:
+  title: DeepAgents API
+  version: 0.1.0
+servers:
+  - url: http://localhost:8000/api/v1
+paths:
+  /chat/sessions:
+    post:
+      summary: Create session
+      responses:
+        '200': { description: OK }
+  /chat/sessions/{id}:
+    get:
+      summary: Get session
+      parameters: [ { name: id, in: path, required: true, schema: { type: string } } ]
+      responses:
+        '200': { description: OK }
+    delete:
+      summary: Delete session
+      parameters: [ { name: id, in: path, required: true, schema: { type: string } } ]
+      responses:
+        '200': { description: OK }
+  /chat/sessions/{id}/messages:
+    post:
+      summary: Send message
+      parameters: [ { name: id, in: path, required: true, schema: { type: string } } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                content: { type: string }
+      responses:
+        '200': { description: OK }
+  /chat/sessions/{id}/stream:
+    get:
+      summary: Stream session events
+      parameters: [ { name: id, in: path, required: true, schema: { type: string } } ]
+      responses:
+        '200': { description: OK }
+  /config:
+    get:
+      summary: Get config
+      responses:
+        '200': { description: OK }
+    put:
+      summary: Update config
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object }
+      responses:
+        '200': { description: OK }
+  /prompts/templates:
+    get:
+      summary: List templates
+      responses:
+        '200': { description: OK }
+    post:
+      summary: Create template
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object }
+      responses:
+        '201': { description: Created }
+  /prompts/templates/{id}/versions:
+    get:
+      summary: List versions
+      parameters: [ { name: id, in: path, required: true, schema: { type: string } } ]
+      responses:
+        '200': { description: OK }
+    post:
+      summary: Create version
+      parameters: [ { name: id, in: path, required: true, schema: { type: string } } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object }
+      responses:
+        '201': { description: Created }
+  /prompts/templates/{id}/preview:
+    post:
+      summary: Preview interpolation
+      parameters: [ { name: id, in: path, required: true, schema: { type: string } } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object }
+      responses:
+        '200': { description: OK }
+  /agents/subagents:
+    get:
+      summary: List subagents
+      responses:
+        '200': { description: OK }
+    post:
+      summary: Add subagent
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object }
+      responses:
+        '201': { description: Created }
+    delete:
+      summary: Clear subagents
+      responses:
+        '204': { description: No Content }
+  /agents/plan/graph:
+    get:
+      summary: Get plan graph
+      responses:
+        '200': { description: OK }
+  /tools/execute:
+    post:
+      summary: Execute tool
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object }
+      responses:
+        '200': { description: OK }
+  /kb/sources:
+    get:
+      summary: List KB sources
+      responses:
+        '200': { description: OK }
+    post:
+      summary: Add KB source
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object }
+      responses:
+        '201': { description: Created }
+  /kb/sources/{id}:
+    delete:
+      summary: Delete KB source
+      parameters: [ { name: id, in: path, required: true, schema: { type: string } } ]
+      responses:
+        '204': { description: No Content }
+  /kb/query:
+    get:
+      summary: Preview KB query
+      responses:
+        '200': { description: OK }
+  /kb/update:
+    post:
+      summary: Update KB index
+      responses:
+        '200': { description: OK }
+  /skills:
+    get:
+      summary: List skills
+      responses:
+        '200': { description: OK }

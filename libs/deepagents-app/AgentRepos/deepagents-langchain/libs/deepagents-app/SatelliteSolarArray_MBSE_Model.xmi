@@ -1,0 +1,351 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<XMI xmi.version="2.1" xmlns:UML="http://schema.omg.org/spec/UML/2.1" xmlns:SysML="http://www.omg.org/spec/SysML/20170701/SysML" xmlns:MD="http://www.nomagic.com/magicdraw/22.0" timestamp="2024-01-06T10:00:00.000Z">
+  <XMI.header>
+    <XMI.documentation>
+      <XMI.exporter>MagicDraw System Engineers 2022x</XMI.exporter>
+      <XMI.exporterVersion>22.0.0</XMI.exporterVersion>
+      <XMI.metamodelVersion>2.1</XMI.metamodelVersion>
+    </XMI.documentation>
+  </XMI.header>
+  
+  <XMI.content>
+    <!-- 项目信息 -->
+    <UML:Model xmi:id="satellite_solar_array_model" name="SatelliteSolarArrayMaintenanceTest" isLeaf="false" isRoot="false" isAbstract="false">
+      <UML:ModelElement.stereotype>
+        <UML:Stereotype xmi:id="system_model_stereotype" name="SystemModel"/>
+      </UML:ModelElement.stereotype>
+      
+      <!-- 需求包 -->
+      <UML:Package xmi:id="requirements_package" name="Requirements" isLeaf="false" isRoot="false" isAbstract="false">
+        <UML:ModelElement.stereotype>
+          <UML:Stereotype xmi:id="requirements_stereotype" name="Requirements"/>
+        </UML:ModelElement.stereotype>
+        
+        <!-- 太阳帆板展开功能需求 -->
+        <UML:Requirement xmi:id="REQ-001" name="太阳帆板展开功能测试" isLeaf="false" isRoot="false" isAbstract="false">
+          <UML:ModelElement.stereotype>
+            <UML:Stereotype xmi:id="functional_requirement_stereotype" name="FunctionalRequirement"/>
+          </UML:ModelElement.stereotype>
+          <UML:Requirement.text>验证太阳帆板在轨展开功能是否正常，包括展开角度、展开时间、展开力矩等关键参数</UML:Requirement.text>
+          <UML:Requirement.id>REQ-001</UML:Requirement.id>
+          <UML:Requirement.priority>high</UML:Requirement.priority>
+          <UML:Requirement.risk>medium</UML:Requirement.risk>
+          <UML:Requirement.status>draft</UML:Requirement.status>
+          <UML:Requirement.verificationMethod>test</UML:Requirement.verificationMethod>
+          
+          <!-- 智能体辅助信息 -->
+          <UML:TaggedValue xmi:id="ai_assistance_req001" tag="AIAssistance" value="enabled"/>
+          <UML:TaggedValue xmi:id="ai_checkpoints_req001" tag="AICheckpoints" value="展开前状态确认,展开过程监控,展开完成验证"/>
+          <UML:TaggedValue xmi:id="ai_safety_level_req001" tag="AISafetyLevel" value="high"/>
+        </UML:Requirement>
+        
+        <!-- 发电性能需求 -->
+        <UML:Requirement xmi:id="REQ-002" name="太阳帆板发电性能测试" isLeaf="false" isRoot="false" isAbstract="false">
+          <UML:ModelElement.stereotype>
+            <UML:Stereotype xmi:id="functional_requirement_stereotype_2" name="FunctionalRequirement"/>
+          </UML:ModelElement.stereotype>
+          <UML:Requirement.text>测试太阳帆板发电功率、电压稳定性、电流输出等电气性能参数</UML:Requirement.text>
+          <UML:Requirement.id>REQ-002</UML:Requirement.id>
+          <UML:Requirement.priority>high</UML:Requirement.priority>
+          <UML:Requirement.risk>medium</UML:Requirement.risk>
+          <UML:Requirement.status>draft</UML:Requirement.status>
+          <UML:Requirement.verificationMethod>test</UML:Requirement.verificationMethod>
+          
+          <!-- 智能体辅助信息 -->
+          <UML:TaggedValue xmi:id="ai_assistance_req002" tag="AIAssistance" value="enabled"/>
+          <UML:TaggedValue xmi:id="ai_checkpoints_req002" tag="AICheckpoints" value="发电系统激活,功率输出测试,性能评估"/>
+          <UML:TaggedValue xmi:id="ai_safety_level_req002" tag="AISafetyLevel" value="high"/>
+        </UML:Requirement>
+        
+        <!-- 结构完整性需求 -->
+        <UML:Requirement xmi:id="REQ-003" name="太阳帆板结构完整性检查" isLeaf="false" isRoot="false" isAbstract="false">
+          <UML:ModelElement</minimax:tool_call>>
+            <UML:Stereotype xmi:id="functional_requirement_stereotype_3" name="FunctionalRequirement"/>
+          </UML:ModelElement</minimax:tool_call>>
+          <UML:Requirement.text>检查太阳帆板结构是否有损伤、变形、松动等问题，确保结构安全</UML:Requirement.text>
+          <UML:Requirement.id>REQ-003</UML:Requirement.id>
+          <UML:Requirement.priority>high</UML:Requirement.priority>
+          <UML:Requirement.risk>high</UML:Requirement.risk>
+          <UML:Requirement.status>draft</UML:Requirement.status>
+          <UML:Requirement.verificationMethod>inspection</UML:Requirement.verificationMethod>
+          
+          <!-- 智能体辅助信息 -->
+          <UML:TaggedValue xmi:id="ai_assistance_req003" tag="AIAssistance" value="enabled"/>
+          <UML:TaggedValue xmi:id="ai_checkpoints_req003" tag="AICheckpoints" value="目视检查,力学检查,结构评估"/>
+          <UML:TaggedValue xmi:id="ai_safety_level_req003" tag="AISafetyLevel" value="critical"/>
+        </UML:Requirement>
+        
+        <!-- 安全合规需求 -->
+        <UML:Requirement xmi:id="REQ-004" name="运维操作安全合规要求" isLeaf="false" isRoot="false" isAbstract="false">
+          <UML:ModelElement</minimax:tool_call>>
+            <UML:Stereotype xmi:id="constraint_stereotype" name="Constraint"/>
+          </UML:ModelElement</minimax:tool_call>>
+          <UML:Requirement.text>所有运维操作必须符合航天安全标准，包括操作授权、风险评估、应急预案等</UML:Requirement.text>
+          <UML:Requirement.id>REQ-004</UML:Requirement.id>
+          <UML:Requirement.priority>high</UML:Requirement.priority>
+          <UML:Requirement.risk>critical</UML:Requirement.risk>
+          <UML:Requirement.status>draft</UML:Requirement.status>
+          <UML:Requirement.verificationMethod>review</UML:Requirement.verificationMethod>
+          
+          <!-- 智能体辅助信息 -->
+          <UML:TaggedValue xmi:id="ai_assistance_req004" tag="AIAssistance" value="enabled"/>
+          <UML:TaggedValue xmi:id="ai_checkpoints_req004" tag="AICheckpoints" value="操作授权验证,风险评估,应急处置"/>
+          <UML:TaggedValue xmi:id="ai_safety_level_req004" tag="AISafetyLevel" value="critical"/>
+        </UML:Requirement>
+        
+        <!-- 姿态控制需求 -->
+        <UML:Requirement xmi:id="REQ-005" name="太阳帆板姿态控制测试" isLeaf="false" isRoot="false" isAbstract="false">
+          <UML:ModelElement</minimax:tool_call>>
+            <UML:Stereotype xmi:id="functional_requirement_stereotype_5" name="FunctionalRequirement"/>
+          </UML:ModelElement</minimax:tool_call>>
+          <UML:Requirement.text>测试太阳帆板姿态调整功能，包括指向精度、稳定性、响应速度等</UML:Requirement.text>
+          <UML:Requirement.id>REQ-005</UML:Requirement.id>
+          <UML:Requirement.priority>medium</UML:Requirement.priority>
+          <UML:Requirement.risk>medium</UML:Requirement.risk>
+          <UML:Requirement.status>draft</UML:Requirement.status>
+          <UML:Requirement.verificationMethod>test</UML:Requirement.verificationMethod>
+          
+          <!-- 智能体辅助信息 -->
+          <UML:TaggedValue xmi:id="ai_assistance_req005" tag="AIAssistance" value="enabled"/>
+          <UML:TaggedValue xmi:id="ai_checkpoints_req005" tag="AICheckpoints" value="指向精度测试,响应速度测试,稳定性验证"/>
+          <UML:TaggedValue xmi:id="ai_safety_level_req005" tag="AISafetyLevel" value="medium"/>
+        </UML:Requirement>
+        
+        <!-- 热控系统需求 -->
+        <UML:Requirement xmi:id="REQ-006" name="太阳帆板热控系统测试" isLeaf="false" isRoot="false" isAbstract="false">
+          <UML:ModelElement</minimax:tool_call>>
+            <UML:Stereotype xmi:id="functional_requirement_stereotype_6" name="FunctionalRequirement"/>
+          </UML:ModelElement</minimax:tool_call>>
+          <UML:Requirement.text>验证太阳帆板热控系统工作正常，包括温度监测、散热控制、热保护功能</UML:Requirement.text>
+          <UML:Requirement.id>REQ-006</UML:Requirement.id>
+          <UML:Requirement.priority>medium</UML:Requirement.priority>
+          <UML:Requirement.risk>medium</UML:Requirement.risk>
+          <UML:Requirement.status>draft</UML:Requirement.status>
+          <UML:Requirement.verificationMethod>test</UML:Requirement.verificationMethod>
+          
+          <!-- 智能体辅助信息 -->
+          <UML:TaggedValue xmi:id="ai_assistance_req006" tag="AIAssistance" value="enabled"/>
+          <UML:TaggedValue xmi:id="ai_checkpoints_req006" tag="AICheckpoints" value="温度监测,热控功能测试,保护机制验证"/>
+          <UML:TaggedValue xmi:id="ai_safety_level_req006" tag="AISafetyLevel" value="medium"/>
+        </UML:Requirement>
+        
+        <!-- 数据记录需求 -->
+        <UML:Requirement xmi:id="REQ-007" name="测试数据记录和追溯要求" isLeaf="false" isRoot="false" isAbstract="false">
+          <UML:ModelElement</minimax:tool_call>>
+            <UML:Stereotype xmi:id="non_functional_requirement_stereotype" name="NonFunctionalRequirement"/>
+          </UML:ModelElement</minimax:tool_call>>
+          <UML:Requirement.text>所有测试数据必须完整记录，支持数据追溯和审计，确保测试过程可重现</UML:Requirement.text>
+          <UML:Requirement.id>REQ-007</UML:Requirement.id>
+          <UML:Requirement.priority>high</UML:Requirement.priority>
+          <UML:Requirement.risk>low</UML:Requirement.risk>
+          <UML:Requirement.status>draft</UML:Requirement.status>
+          <UML:Requirement.verificationMethod>inspection</UML:Requirement.verificationMethod>
+          
+          <!-- 智能体辅助信息 -->
+          <UML:TaggedValue xmi:id="ai_assistance_req007" tag="AIAssistance" value="enabled"/>
+          <UML:TaggedValue xmi:id="ai_checkpoints_req007" tag="AICheckpoints" value="数据记录验证,追溯性检查,审计支持"/>
+          <UML:TaggedValue xmi:id="ai_safety_level_req007" tag="AISafetyLevel" value="low"/>
+        </UML:Requirement>
+      </UML:Package>
+      
+      <!-- 系统架构包 -->
+      <UML:Package xmi:id="architecture_package" name="SystemArchitecture" isLeaf="false" isRoot="false" isAbstract="false">
+        <UML:ModelElement</minimax:tool_call>>
+          <UML:Stereotype xmi:id="architecture_stereotype" name="Architecture"/>
+        </UML:ModelElement</minimax:tool_call>>
+        
+        <!-- 太阳帆板部署系统 -->
+        <UML:Block xmi:id="COMP-001" name="SolarArrayDeploymentSystem" isLeaf="false" isRoot="false" isAbstract="false">
+          <UML:ModelElement</minimax:tool_call>>
+            <UML:Stereotype xmi:id="system_block_stereotype" name="SystemBlock"/>
+          </UML:ModelElement</minimax:tool_call>>
+          <UML:Block.isEncapsulated>false</UML:Block.isEncapsulated>
+          
+          <!-- 属性定义 -->
+          <UML:Property xmi:id="deployment_motor_prop" name="展开电机" isLeaf="false" isRoot="false" isAbstract="false" visibility="public" isStatic="false" isReadOnly="false" isDerived="false" isOrdered="false" isUnique="true">
+            <UML:Property.type>
+              <UML:DataType xmi:id="motor_type" name="Motor"/>
+            </UML:Property.type>
+          </UML:Property>
+          
+          <UML:Property xmi:id="deployment_angle_prop" name="展开角度" isLeaf="false" isRoot="false" isAbstract="false" visibility="public" isStatic="false" isReadOnly="false" isDerived="false" isOrdered="false" isUnique="true">
+            <UML:Property.type>
+              <UML:DataType xmi:id="angle_type" name="Angle"/>
+            </UML:Property.type>
+          </UML:Property>
+          
+          <!-- 智能体监控属性 -->
+          <UML:TaggedValue xmi:id="ai_monitoring_comp001" tag="AIMonitoring" value="enabled"/>
+          <UML:TaggedValue xmi:id="ai_safety_check_comp001" tag="AISafetyCheck" value="展开过程实时监控"/>
+          <UML:TaggedValue xmi:id="ai_alerts_comp001" tag="AIAlerts" value="展开异常,角度偏差,机械故障"/>
+        </UML:Block>
+        
+        <!-- 发电系统 -->
+        <UML:Block xmi:id="COMP-002" name="SolarArrayPowerSystem" isLeaf="false" isRoot="false" isAbstract="false">
+          <UML:ModelElement</minimax:tool_call>>
+            <UML:Stereotype xmi:id="system_block_stereotype_2" name="SystemBlock"/>
+          </UML:ModelElement</minimax:tool_call>>
+          <UML:Block.isEncapsulated>false</UML:Block.isEncapsulated>
+          
+          <UML:Property xmi:id="power_output_prop" name="功率输出" isLeaf="false" isRoot="false" isAbstract="false" visibility="public" isStatic="false" isReadOnly="false" isDerived="false" isOrdered="false" isUnique="true">
+            <UML:Property.type>
+              <UML:DataType xmi:id="power_type" name="Power"/>
+            </UML:Property.type>
+          </UML:Property>
+          
+          <UML:Property xmi:id="voltage_prop" name="电压" isLeaf="false" isRoot="false" isAbstract="false" visibility="public" isStatic="false" isReadOnly="false" isDerived="false" isOrdered="false" isUnique="true">
+            <UML:Property.type>
+              <UML:DataType xmi:id="voltage_type" name="Voltage"/>
+            </UML:Property.type>
+          </UML:Property>
+          
+          <!-- 智能体监控属性 -->
+          <UML:TaggedValue xmi:id="ai_monitoring_comp002" tag="AIMonitoring" value="enabled"/>
+          <UML:TaggedValue xmi:id="ai_safety_check_comp002" tag="AISafetyCheck" value="发电性能实时监控"/>
+          <UML:TaggedValue xmi:id="ai_alerts_comp002" tag="AIAlerts" value="功率异常,电压波动,效率下降"/>
+        </UML:Block>
+        
+        <!-- 结构系统 -->
+        <UML:Block xmi:id="COMP-003" name="SolarArrayStructureSystem" isLeaf="false" isRoot="false" isAbstract="false">
+          <UML:ModelElement</minimax:tool_call>>
+            <UML:Stereotype xmi:id="system_block_stereotype_3" name="SystemBlock"/>
+          </UML:ModelElement</minimax:tool_call>>
+          <UML:Block.isEncapsulated>false</UML:Block.isEncapsulated>
+          
+          <UML:Property xmi:id="structural_integrity_prop" name="结构完整性" isLeaf="false" isRoot="false" isAbstract="false" visibility="public" isStatic="false" isReadOnly="false" isDerived="false" isOrdered="false" isUnique="true">
+            <UML:Property.type>
+              <UML:DataType xmi:id="integrity_type" name="Integrity"/>
+            </UML:Property.type>
+          </UML:Property>
+          
+          <!-- 智能体监控属性 -->
+          <UML:TaggedValue xmi:id="ai_monitoring_comp003" tag="AIMonitoring" value="enabled"/>
+          <UML:TaggedValue xmi:id="ai_safety_check_comp003" tag="AISafetyCheck" value="结构完整性检查"/>
+          <UML:TaggedValue xmi:id="ai_alerts_comp003" tag="AIAlerts" value="结构损伤,变形,松动"/>
+        </UML:Block>
+        
+        <!-- 姿态控制系统 -->
+        <UML:Block xmi:id="COMP-004" name="SolarArrayAttitudeControl" isLeaf="false" isRoot="false" isAbstract="false">
+          <UML:ModelElement</minimax:tool_call>>
+            <UML:Stereotype xmi:id="system_block_stereotype_4" name="SystemBlock"/>
+          </UML:ModelElement</minimax:tool_call>>
+          <UML:Block.isEncapsulated>false</UML:Block.isEncapsulated>
+          
+          <UML:Property xmi:id="attitude_accuracy_prop" name="姿态精度" isLeaf="false" isRoot="false" isAbstract="false" visibility="public" isStatic="false" isReadOnly="false" isDerived="false" isOrdered="false" isUnique="true">
+            <UML:Property.type>
+              <UML:DataType xmi:id="accuracy_type" name="Accuracy"/>
+            </UML:Property.type>
+          </UML:Property>
+          
+          <!-- 智能体监控属性 -->
+          <UML:TaggedValue xmi:id="ai_monitoring_comp004" tag="AIMonitoring" value="enabled"/>
+          <UML:TaggedValue xmi:id="ai_safety_check_comp004" tag="AISafetyCheck" value="姿态控制监控"/>
+          <UML:TaggedValue xmi:id="ai_alerts_comp004" tag="AIAlerts" value="姿态偏差,控制异常,响应延迟"/>
+        </UML:Block>
+        
+        <!-- 热控系统 -->
+        <UML:Block xmi:id="COMP-005" name="SolarArrayThermalControl" isLeaf="false" isRoot="false" isAbstract="false">
+          <UML:ModelElement</minimax:tool_call>>
+            <UML:Stereotype xmi:id="system_block_stereotype_5" name="SystemBlock"/>
+          </UML:ModelElement</minimax:tool_call>>
+          <UML:Block.isEncapsulated>false</UML:Block.isEncapsulated>
+          
+          <UML:Property xmi:id="temperature_prop" name="温度" isLeaf="false" isRoot="false" isAbstract="false" visibility="public" isStatic="false" isReadOnly="false" isDerived="false" isOrdered="false" isUnique="true">
+            <UML:Property.type>
+              <UML:DataType xmi:id="temperature_type" name="Temperature"/>
+            </UML:Property.type>
+          </UML:Property>
+          
+          <!-- 智能体监控属性 -->
+          <UML:TaggedValue xmi:id="ai_monitoring_comp005" tag="AIMonitoring" value="enabled"/>
+          <UML:TaggedValue xmi:id="ai_safety_check_comp005" tag="AISafetyCheck" value="温度监控"/>
+          <UML:TaggedValue xmi:id="ai_alerts_comp005" tag="AIAlerts" value="温度异常,热控故障,保护动作"/>
+        </UML:Block>
+        
+        <!-- 运维测试系统 -->
+        <UML:Block xmi:id="COMP-006" name="MaintenanceTestSystem" isLeaf="false" isRoot="false" isAbstract="false">
+          <UML:ModelElement</minimax:tool_call>>
+            <UML:Stereotype xmi:id="system_block_stereotype_6" name="SystemBlock"/>
+          </UML:ModelElement</minimax:tool_call>>
+          <UML:Block.isEncapsulated>false</UML:Block.isEncapsulated>
+          
+          <!-- 智能体辅助系统 -->
+          <UML:TaggedValue xmi:id="ai_assistance_system" tag="AIAssistanceSystem" value="enabled"/>
+          <UML:TaggedValue xmi:id="ai_capabilities" tag="AICapabilities" value="实时监控,异常检测,决策支持,报告生成"/>
+          <UML:TaggedValue xmi:id="ai_integration" tag="AIIntegration" value="MagicDraw2022x"/>
+        </UML:Block>
+        
+        <!-- 安全监控系统 -->
+        <UML:Block xmi:id="COMP-007" name="SafetyMonitoringSystem" isLeaf="false" isRoot="false" isAbstract="false">
+          <UML:ModelElement</minimax:tool_call>>
+            <UML:Stereotype xmi:id="system_block_stereotype_7" name="SystemBlock"/>
+          </UML:ModelElement</minimax:tool_call>>
+          <UML:Block.isEncapsulated>false</UML:Block.isEncapsulated>
+          
+          <!-- 智能体安全监控 -->
+          <UML:TaggedValue xmi:id="ai_safety_monitoring" tag="AISafetyMonitoring" value="enabled"/>
+          <UML:TaggedValue xmi:id="ai_safety_protocols" tag="AISafetyProtocols" value="风险评估,应急处置,合规检查"/>
+        </UML:Block>
+      </UML:Package>
+      
+      <!-- 运维测试流程包 -->
+      <UML:Package xmi:id="test_procedures_package" name="TestProcedures" isLeaf="false" isRoot="false" isAbstract="false">
+        <UML:ModelElement</minimax:tool_call>>
+          <UML:Stereotype xmi:id="test_procedures_stereotype" name="TestProcedures"/>
+        </UML:ModelElement</minimax:tool_call>>
+        
+        <!-- 太阳帆板展开测试流程 -->
+        <UML:Activity xmi:id="deployment_test_activity" name="太阳帆板展开测试流程" isLeaf="false" isRoot="false" isAbstract="false">
+          <UML:ModelElement</minimax:tool_call>>
+            <UML:Stereotype xmi:id="test_activity_stereotype" name="TestActivity"/>
+          </UML:ModelElement</minimax:tool_call>>
+          
+          <!-- 智能体辅助流程 -->
+          <UML:TaggedValue xmi:id="ai_assisted_procedure" tag="AIAssistedProcedure" value="enabled"/>
+          <UML:TaggedValue xmi:id="ai_checkpoints_deployment" tag="AICheckpoints" value="展开前检查,展开过程监控,展开完成验证"/>
+          <UML:TaggedValue xmi:id="ai_safety_validation" tag="AISafetyValidation" value="实时安全检查"/>
+        </UML:Activity>
+        
+        <!-- 发电性能测试流程 -->
+        <UML:Activity xmi:id="power_test_activity" name="发电性能测试流程" isLeaf="false" isRoot="false" isAbstract="false">
+          <UML:ModelElement</minimax:tool_call>>
+            <UML:Stereotype xmi:id="test_activity_stereotype_2" name="TestActivity"/>
+          </UML:ModelElement</minimax:tool_call>>
+          
+          <!-- 智能体辅助流程 -->
+          <UML:TaggedValue xmi:id="ai_assisted_procedure_2" tag="AIAssistedProcedure" value="enabled"/>
+          <UML:TaggedValue xmi:id="ai_checkpoints_power" tag="AICheckpoints" value="发电系统激活,功率测试,性能评估"/>
+          <UML:TaggedValue xmi:id="ai_safety_validation_2" tag="AISafetyValidation" value="电气安全检查"/>
+        </UML:Activity>
+      </UML:Package>
+      
+      <!-- 智能体配置包 -->
+      <UML:Package xmi:id="ai_configuration_package" name="AIConfiguration" isLeaf="false" isRoot="false" isAbstract="false">
+        <UML:ModelElement</minimax:tool_call>>
+          <UML:Stereotype xmi:id="ai_config_stereotype" name="AIConfiguration"/>
+        </UML:ModelElement</minimax:tool_call>>
+        
+        <!-- 智能体能力配置 -->
+        <UML:Constraint xmi:id="ai_capabilities_config" name="智能体能力配置" isLeaf="false" isRoot="false" isAbstract="false">
+          <UML:Constraint.specification>
+            <UML:LiteralString xmi:id="ai_capabilities_spec" value="实时监控,异常检测,决策支持,风险评估,报告生成,合规检查"/>
+          </UML:Constraint.specification>
+        </UML:Constraint>
+        
+        <!-- 安全级别配置 -->
+        <UML:Constraint xmi:id="ai_safety_levels_config" name="安全级别配置" isLeaf="false" isRoot="false" isAbstract="false">
+          <UML:Constraint.specification>
+            <UML:LiteralString xmi:id="ai_safety_levels_spec" value="critical:立即停止操作,high:警告并加强监控,medium:记录并继续,low:记录"/>
+          </UML:Constraint.specification>
+        </UML:Constraint>
+        
+        <!-- MagicDraw集成配置 -->
+        <UML:Constraint xmi:id="magicdraw_integration_config" name="MagicDraw集成配置" isLeaf="false" isRoot="false" isAbstract="false">
+          <UML:Constraint.specification>
+            <UML:LiteralString xmi:id="magicdraw_integration_spec" value="API接口:enabled,数据同步:enabled,实时更新:enabled,报告生成:enabled"/>
+          </UML:Constraint.specification>
+        </UML:Constraint>
+      </UML:Package>
+    </UML:Model>
+  </XMI.content>
+</XMI>

@@ -218,3 +218,19 @@ libs/deepagents-cli/TEXTUAL_PROGRESS.md
 
 /tmp/
 */tmp/.DS_Store
+*.bin
+*.pth
+*.pt
+*.sqlite3
+*.j2
+*.typed
+libs/deepagents-web/apps/server/.npm-cache/*
+libs/deepagents-web/apps/server/node_modules/
+libs/deepagents-web/apps/server/npm-cache/*
+libs/deepagents-web/apps/web/.npm-cache/*
+libs/deepagents-web/apps/web/node_modules/* 
+libs/deepagents-web/apps/web/npm-cache/*
+libs/deepagents-web/services/deepagents_data/*
+libs/deepagents-web/services/python/deepagents_data/*
+libs/deepagents-web/services/python/uav_sysml_model/*
+libs/deepagents-web/services/python/*.pdf
