@@ -14,9 +14,14 @@ from pydantic import BaseModel
 from rag_tool import search_knowledge_base
 from rag_service import get_rag_service
 from fastapi.responses import JSONResponse, FileResponse
-from fastapi import Request
+from fastapi import Request, HTTPException
 from starlette.responses import StreamingResponse
+from langchain_core.messages import HumanMessage
 import logging
+import warnings
+
+# Filter out noisy Pydantic warnings about NotRequired
+warnings.filterwarnings("ignore", message=".*typing.NotRequired.*", category=UserWarning)
 
 # Filter out noisy polling logs
 class EndpointFilter(logging.Filter):
@@ -38,11 +43,11 @@ try:
     from deepagents import create_deep_agent
     from deepagents.backends import CompositeBackend
     from deepagents.backends.filesystem import FilesystemBackend
-    from deepagents_cli.agent_memory import AgentMemoryMiddleware
-    from deepagents_cli.skills import SkillsMiddleware
-    from deepagents_cli.shell import ShellMiddleware
+    from deepagents_core.agent_memory import AgentMemoryMiddleware
+    from deepagents_core.skills import SkillsMiddleware
+    from deepagents_core.shell import ShellMiddleware
     from deepagents_cli.config import settings, config
-    from deepagents_cli.agent import get_system_prompt, get_default_coding_instructions
+    from deepagents_core.agent import get_system_prompt, get_default_coding_instructions
     
     # Monkeypatch to allow Windows paths
     import deepagents.middleware.filesystem
@@ -115,7 +120,7 @@ def load_config():
 
 def save_config(cfg):
     try:
-        CONFIG_FILE.write_text(json.dumps(cfg, indent=2), encoding='utf-8')
+        CONFIG_FILE.write_text(json.dumps(cfg, indent=2, ensure_ascii=False), encoding='utf-8')
     except Exception as e:
         print(f"Error saving config: {e}")
 
@@ -135,7 +140,7 @@ def load_json_file(path, default=[]):
 
 def save_json_file(path, data):
     try:
-        path.write_text(json.dumps(data, indent=2), encoding='utf-8')
+        path.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding='utf-8')
     except Exception as e:
         print(f"Error saving {path}: {e}")
 
@@ -343,12 +348,25 @@ async def save_feedback(req: Request):
     body = await req.json()
     # body: { messageId, query, response, rating: 'good'|'bad', timestamp }
     feedbacks = load_json_file(FEEDBACK_FILE)
+    
     if not body.get('id'):
         body['id'] = _new_id()
     if not body.get('timestamp'):
         body['timestamp'] = int(time.time() * 1000)
         
-    feedbacks.append(body)
+    # Convert to RLHF/SFT format
+    # Structure optimized for Agent Fine-tuning (Alpaca-style with feedback)
+    entry = {
+        "id": body.get('id'),
+        "instruction": body.get('query', ''),
+        "input": "", # Reserved for system prompt or context if needed
+        "output": body.get('response', ''),
+        "label": body.get('rating', 'good'),
+        "score": 1.0 if body.get('rating') == 'good' else 0.0,
+        "timestamp": body.get('timestamp')
+    }
+        
+    feedbacks.append(entry)
     save_json_file(FEEDBACK_FILE, feedbacks)
     return {'ok': True}
 
@@ -597,7 +615,123 @@ async def create_session(req: Request):
             'middleware_enabled': True
         }
     }
+    # Initialize checkpointer
+    checkpointers[sid] = InMemorySaver()
     return {'id': sid}
+
+class MessageRequest(BaseModel):
+    content: str
+    tools: bool = True
+
+@app.post('/sessions/{sid}/messages')
+async def post_message(sid: str, req: MessageRequest):
+    if sid not in sessions:
+        raise HTTPException(status_code=404, detail="Session not found")
+    
+    sessions[sid]['pending_input'] = req.content
+    sessions[sid]['enable_tools'] = req.tools
+    sessions[sid]['messages'].append({'role': 'user', 'content': req.content})
+    return {'ok': True}
+
+@app.get('/sessions/{sid}/stream')
+async def stream_session(sid: str):
+    if sid not in sessions:
+        raise HTTPException(status_code=404, detail="Session not found")
+    
+    session = sessions[sid]
+    pending_input = session.get('pending_input')
+    enable_tools = session.get('enable_tools', True)
+    
+    # If no pending input, maybe it's a reconnection?
+    # For now, we only support streaming response to a new message.
+    if not pending_input:
+         # Send a keep-alive or ping to keep connection open if frontend expects it
+         # But usually frontend connects ONLY after sending a message.
+         # If we return immediately, frontend might think it's done.
+         # We'll just return a ping and done.
+         async def empty_gen():
+             yield f"data: {json.dumps({'type': 'ping'})}\n\n"
+             yield f"data: {json.dumps({'type': 'done'})}\n\n"
+         return StreamingResponse(empty_gen(), media_type="text/event-stream")
+
+    session['pending_input'] = None
+    
+    cp = checkpointers.get(sid)
+    if not cp:
+        cp = InMemorySaver()
+        checkpointers[sid] = cp
+        
+    agent = _init_agent(
+        assistant_id=sid,
+        checkpointer=cp,
+        enable_tools=enable_tools,
+        custom_system_prompt=session['config'].get('system_prompt')
+    )
+    
+    async def event_generator():
+        try:
+            config = {"configurable": {"thread_id": sid}}
+            
+            async for event in agent.astream_events(
+                {"messages": [HumanMessage(content=pending_input)]},
+                config=config,
+                version="v1"
+            ):
+                kind = event["event"]
+                
+                if kind == "on_chat_model_stream":
+                    content = event["data"]["chunk"].content
+                    if content:
+                        yield f"data: {json.dumps({'type': 'chunk', 'content': content})}\n\n"
+                        
+                        # Append to assistant message in session for context endpoint
+                        # Note: This is a bit hacky, proper way is to read from checkpointer/history after run
+                        # But for real-time UI update we might not need to update session['messages'] incrementally
+                        # We'll update it at the end or let the graph handle it.
+                
+                elif kind == "on_tool_start":
+                    yield f"data: {json.dumps({
+                        'type': 'tool', 
+                        'id': event['run_id'], 
+                        'name': event['name'],
+                        'status': 'running',
+                        'input': str(event['data'].get('input'))
+                    })}\n\n"
+                    
+                elif kind == "on_tool_end":
+                     yield f"data: {json.dumps({
+                        'type': 'tool', 
+                        'id': event['run_id'], 
+                        'name': event['name'],
+                        'status': 'done',
+                        'output': str(event['data'].get('output'))
+                    })}\n\n"
+                    
+            # Done
+            yield f"data: {json.dumps({'type': 'done'})}\n\n"
+            
+            # Update session history from checkpointer state
+            snapshot = agent.get_state(config)
+            if snapshot and snapshot.values and 'messages' in snapshot.values:
+                # Sync our simple session['messages'] with graph state
+                # This ensures /context endpoint returns full history
+                msgs = snapshot.values['messages']
+                formatted = []
+                for m in msgs:
+                    role = 'user'
+                    if m.type == 'ai': role = 'assistant'
+                    elif m.type == 'system': role = 'system'
+                    elif m.type == 'tool': role = 'tool'
+                    formatted.append({'role': role, 'content': str(m.content)})
+                session['messages'] = formatted
+
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            yield f"data: {json.dumps({'type': 'error', 'content': str(e)})}\n\n"
+            yield f"data: {json.dumps({'type': 'done'})}\n\n"
+
+    return StreamingResponse(event_generator(), media_type="text/event-stream")
 
 @app.get('/sessions/{sid}/context')
 async def get_session_context(sid: str):

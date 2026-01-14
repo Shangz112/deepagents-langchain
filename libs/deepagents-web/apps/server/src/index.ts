@@ -7,6 +7,7 @@ import agents from './routes/agents'
 import tools from './routes/tools'
 import kb from './routes/kb'
 import skills from './routes/skills'
+import feedback from './routes/feedback'
 const app = express()
 app.use(cors())
 app.use(express.json())
@@ -18,6 +19,7 @@ app.use('/api/v1/agents', agents)
 app.use('/api/v1/tools', tools)
 app.use('/api/v1/kb', kb)
 app.use('/api/v1/skills', skills)
+app.use('/api/v1/feedback', feedback)
 const port = Number(process.env.PORT || 8005)
 app.listen(port, () => {
   console.log(`server listening on http://localhost:${port}`)

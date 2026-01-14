@@ -47,7 +47,7 @@
         <div class="p-2 bg-[#0b0f14] rounded text-xs text-slate-300 leading-relaxed border border-slate-800">
           {{ sessionStore.memorySummary || '暂无记忆摘要...' }}
         </div>
-        <div class="mt-3 text-xs text-slate-400 mb-2">History ({{ sessionStore.history.length }})</div>
+        <div class="mt-3 text-xs text-slate-400 mb-2">History ({{ sessionStore.history?.length || 0 }})</div>
         <div class="grid gap-2">
           <div v-for="(h, idx) in sessionStore.history" :key="idx" class="p-2 rounded bg-slate-800/30 border border-slate-700/50 text-xs truncate">
             <span class="text-accent font-mono mr-1">[{{ h.role }}]</span> {{ h.content }}
@@ -63,7 +63,7 @@
         <span class="text-xs text-slate-500">{{ openSections.logs ? '▼' : '▶' }}</span>
       </button>
       <div v-if="openSections.logs" class="p-3 overflow-y-auto custom-scrollbar flex-1 animate-in slide-in-from-top-2">
-        <div v-if="sessionStore.logs.length === 0" class="text-center text-xs text-slate-600 py-4">无日志记录</div>
+        <div v-if="!sessionStore.logs?.length" class="text-center text-xs text-slate-600 py-4">无日志记录</div>
         <div v-for="log in sessionStore.logs" :key="log.id" class="mb-2 p-2 rounded bg-[#0b0f14] border border-slate-800 text-[10px] font-mono">
           <div class="flex justify-between text-slate-500 mb-1">
             <span>{{ log.time }}</span>
@@ -103,8 +103,8 @@ async function loadSessionData() {
     const ctxRes = await axios.get(`/api/v1/chat/sessions/${sessionStore.sessionId}/context`)
     if (ctxRes.data) {
       sessionStore.setSummary(ctxRes.data.memorySummary)
-      sessionStore.setHistory(ctxRes.data.history)
-      sessionStore.logs = ctxRes.data.logs
+      sessionStore.setHistory(ctxRes.data.history || [])
+      sessionStore.logs = ctxRes.data.logs || []
     }
   } catch (e: any) {
     // Suppress common network interruption errors to avoid console spam

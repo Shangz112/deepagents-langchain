@@ -179,3 +179,17 @@ export async function clearSubAgents() {
   const r = await fetch(`${PY_URL}/agents/subagents`, { method: 'DELETE' })
   return r.json()
 }
+
+export async function saveFeedback(data: any) {
+  const r = await fetch(`${PY_URL}/feedback`, { 
+    method: 'POST', 
+    headers: { 'content-type': 'application/json' }, 
+    body: JSON.stringify(data) 
+  })
+  return r.json()
+}
+
+export async function exportFeedback() {
+  const r = await fetch(`${PY_URL}/feedback/export`)
+  return r.json()
+}

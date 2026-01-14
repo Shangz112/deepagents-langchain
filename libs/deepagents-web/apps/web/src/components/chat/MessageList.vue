@@ -74,23 +74,56 @@
                </div>
             </div>
 
-            <!-- Feedback Buttons (Assistant Only) -->
-            <div v-if="msg.role === 'assistant' && !msg.streaming" class="absolute -bottom-3 right-4 opacity-0 group-hover:opacity-100 transition-opacity flex gap-1 bg-white shadow-sm border border-slate-200 rounded-full p-0.5">
+            <!-- Action Bar -->
+            <div v-if="msg.role === 'assistant' && !msg.streaming" class="flex items-center gap-3 mt-2 pl-1 select-none">
+                <!-- Copy -->
                 <button 
-                    class="p-1 hover:bg-slate-100 rounded-full text-slate-400 hover:text-emerald-500 transition-colors" 
+                    class="text-slate-400 hover:text-slate-600 transition-colors p-1 rounded hover:bg-slate-100" 
+                    title="Copy" 
+                    @click="copyToClipboard(msg.content)"
+                >
+                   <Icon name="copy" size="14" />
+                </button>
+
+                <!-- Regenerate -->
+                <button 
+                    class="text-slate-400 hover:text-slate-600 transition-colors p-1 rounded hover:bg-slate-100" 
+                    title="Regenerate" 
+                    @click="$emit('regenerate', msg)"
+                >
+                   <Icon name="refresh-cw" size="14" />
+                </button>
+
+                <!-- Feedback: Good -->
+                <button 
+                    class="text-slate-400 hover:text-emerald-500 transition-colors p-1 rounded hover:bg-emerald-50" 
                     :class="{'text-emerald-500 bg-emerald-50': feedbackStatus[msg.id] === 'good'}"
                     title="Good response"
                     @click="submitFeedback(msg, 'good')"
                 >
-                    <Icon name="thumbs-up" size="12" />
+                    <Icon name="thumbs-up" size="14" />
                 </button>
+
+                <!-- Feedback: Bad -->
                 <button 
-                    class="p-1 hover:bg-slate-100 rounded-full text-slate-400 hover:text-rose-500 transition-colors" 
+                    class="text-slate-400 hover:text-rose-500 transition-colors p-1 rounded hover:bg-rose-50" 
                     :class="{'text-rose-500 bg-rose-50': feedbackStatus[msg.id] === 'bad'}"
                     title="Bad response"
                     @click="submitFeedback(msg, 'bad')"
                 >
-                    <Icon name="thumbs-down" size="12" />
+                    <Icon name="thumbs-down" size="14" />
+                </button>
+
+                <!-- Separator -->
+                <div class="w-px h-3 bg-slate-300 mx-1"></div>
+
+                <!-- Quote -->
+                <button 
+                    class="text-slate-400 hover:text-slate-600 transition-colors p-1 rounded hover:bg-slate-100" 
+                    title="Quote" 
+                    @click="$emit('quote', msg)"
+                >
+                   <Icon name="quote" size="14" />
                 </button>
             </div>
           </div>
@@ -141,6 +174,8 @@ const props = defineProps<{
 defineEmits<{
   (e: 'retry-tool', evt: any): void
   (e: 'debug-tool', evt: any): void
+  (e: 'regenerate', msg: any): void
+  (e: 'quote', msg: any): void
 }>()
 
 const container = ref<HTMLElement | null>(null)
@@ -148,6 +183,17 @@ const bottomAnchor = ref<HTMLElement | null>(null)
 const shouldAutoScroll = ref(true)
 const reasoningState = reactive<Record<string, boolean>>({})
 const feedbackStatus = reactive<Record<string, 'good'|'bad'>>({})
+
+function copyToClipboard(text: string) {
+  if (!navigator.clipboard) {
+    // Fallback for non-secure contexts if needed, but usually modern browsers support it
+    console.warn('Clipboard API not available')
+    return
+  }
+  navigator.clipboard.writeText(text).catch(err => {
+    console.error('Failed to copy: ', err)
+  })
+}
 
 async function submitFeedback(msg: any, rating: 'good' | 'bad') {
     // Optimistic UI update
