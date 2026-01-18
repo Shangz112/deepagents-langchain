@@ -147,13 +147,21 @@
       </div>
     </div>
     
+    <!-- Task Completion Indicator -->
+    <div v-if="isTaskCompleted" class="w-full flex justify-center mb-6 animate-in fade-in slide-in-from-bottom-2 duration-500">
+        <div class="flex items-center gap-2 px-4 py-2 rounded-full bg-emerald-50 border border-emerald-100 shadow-sm text-emerald-600 text-xs font-medium select-none">
+            <Icon name="check-circle" size="14" />
+            <span>All tasks completed. DeepAgent is ready.</span>
+        </div>
+    </div>
+
     <!-- Bottom Anchor -->
     <div ref="bottomAnchor" class="h-1"></div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, nextTick, watch, onMounted, reactive } from 'vue'
+import { ref, nextTick, watch, onMounted, reactive, computed } from 'vue'
 import axios from 'axios'
 import ToolEventCard from './ToolEventCard.vue'
 import Icon from '../common/Icon.vue'
@@ -167,9 +175,16 @@ const props = defineProps<{
     reasoning?: string // Add reasoning prop type
     timestamp?: number
     streaming?: boolean
+    isError?: boolean
     toolEvents?: Array<any>
   }>
 }>()
+
+const isTaskCompleted = computed(() => {
+    if (props.messages.length === 0) return false
+    const lastMsg = props.messages[props.messages.length - 1]
+    return lastMsg.role === 'assistant' && !lastMsg.streaming && !lastMsg.isError
+})
 
 defineEmits<{
   (e: 'retry-tool', evt: any): void

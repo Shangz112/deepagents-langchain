@@ -67,8 +67,8 @@
          :class="['grid-cols-1', 'md:grid-cols-[240px_1fr]', 'lg:grid-cols-[240px_1fr_320px]']">
       
       <!-- Left Sidebar (Desktop) -->
-      <aside class="hidden md:flex flex-col border-r border-[var(--border-subtle)] bg-[var(--bg-panel)]">
-        <nav class="flex-1 p-4 space-y-1 overflow-y-auto">
+      <aside class="hidden md:flex flex-col border-r border-[var(--border-subtle)] bg-[var(--bg-panel)] h-full overflow-hidden">
+        <nav class="flex-none p-4 space-y-1">
           <div class="text-[10px] font-bold text-[var(--fg-tertiary)] uppercase tracking-wider mb-4 px-3 py-2">Modules</div>
           <RouterLink v-for="link in links" :key="link.path" :to="link.path" 
             class="group flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-[var(--fg-secondary)] hover:text-white hover:bg-[var(--bg-hover)] transition-all duration-200 border border-transparent"
@@ -78,7 +78,13 @@
             {{ link.name }}
           </RouterLink>
         </nav>
-        <div class="p-4 border-t border-[var(--border-subtle)] bg-[var(--bg-surface)]/30">
+        
+        <!-- Session List -->
+        <div class="flex-1 min-h-0 border-t border-[var(--border-subtle)] flex flex-col">
+            <SessionList @select="handleSessionSelect" />
+        </div>
+
+        <div class="p-4 border-t border-[var(--border-subtle)] bg-[var(--bg-surface)]/30 shrink-0">
           <div class="flex items-center justify-between text-xs text-[var(--fg-tertiary)]">
             <span>v0.1.0 Beta</span>
             <div class="flex gap-2">
@@ -89,13 +95,13 @@
       </aside>
 
       <!-- Center Content -->
-      <main class="flex flex-col min-w-0 overflow-hidden relative bg-[var(--bg-app)]">
+      <main class="flex flex-col min-w-0 overflow-hidden relative bg-[var(--bg-app)] h-full">
         <div class="absolute inset-0 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-[var(--accent-surface)]/20 via-transparent to-transparent pointer-events-none"></div>
         <slot />
       </main>
 
       <!-- Right Panel (Desktop) -->
-      <aside class="hidden lg:flex flex-col border-l border-[var(--border-subtle)] bg-[var(--bg-panel)] w-[320px] shadow-xl z-10">
+      <aside class="hidden lg:flex flex-col border-l border-[var(--border-subtle)] bg-[var(--bg-panel)] w-[320px] shadow-xl z-10 h-full overflow-hidden">
         <slot name="right" />
       </aside>
 
@@ -105,18 +111,27 @@
 
 <script setup lang="ts">
 import { ref } from 'vue'
+import { useRouter } from 'vue-router'
 import Icon from '../components/common/Icon.vue'
+import SessionList from '../components/chat/SessionList.vue'
+import { sessionStore } from '../store'
 
+const router = useRouter()
 const mobileMenuOpen = ref(false)
 
 const links = [
   { name: '对话 Chat', path: '/', icon: 'message-square' },
-  { name: '计划 Plan', path: '/plan', icon: 'layers' },
-  { name: '提示词 Prompts', path: '/prompts', icon: 'edit' },
-  { name: '知识库 Knowledge', path: '/kb', icon: 'book-open' },
-  { name: '技能 Skills', path: '/skills', icon: 'cpu' },
-  { name: '配置 Config', path: '/config', icon: 'settings' },
+  { name: '计划 Plan Graph', path: '/plan', icon: 'git-merge' },
+  { name: '知识库 Knowledge', path: '/kb', icon: 'database' },
+  { name: '技能 Skills', path: '/skills', icon: 'tool' },
+  { name: '提示词 Prompts', path: '/prompts', icon: 'terminal' },
+  { name: '配置Config', path: '/config', icon: 'settings' },
 ]
+
+function handleSessionSelect(sid: string) {
+  sessionStore.setSessionId(sid)
+  router.push('/')
+}
 </script>
 
 <style scoped>

@@ -6,7 +6,7 @@ from pathlib import Path
 
 from deepagents import create_deep_agent
 from deepagents.backends import CompositeBackend
-from deepagents.backends.filesystem import FilesystemBackend
+from deepagents.backends.filesystem import FilesystemBackend, strict_project_validator
 from deepagents.backends.sandbox import SandboxBackendProtocol
 from deepagents.middleware import MemoryMiddleware, SkillsMiddleware
 from langchain.agents.middleware import (
@@ -412,7 +412,7 @@ def create_cli_agent(
     # CONDITIONAL SETUP: Local vs Remote Sandbox
     if sandbox is None:
         # ========== LOCAL MODE ==========
-        backend = FilesystemBackend()  # Current working directory
+        backend = FilesystemBackend(path_validator=strict_project_validator)  # Current working directory
 
         # Local context middleware (git info, directory tree, etc.)
         agent_middleware.append(LocalContextMiddleware())

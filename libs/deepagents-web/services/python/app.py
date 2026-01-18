@@ -2,6 +2,7 @@ import os
 import sys
 import time
 import json
+import db as db_module
 import asyncio
 import threading
 import hashlib
@@ -19,6 +20,11 @@ from starlette.responses import StreamingResponse
 from langchain_core.messages import HumanMessage
 import logging
 import warnings
+from dotenv import load_dotenv
+
+# Load env from specific path
+env_path = Path(r"d:/MASrepos/deepagents-langchain/libs/deepagents-web/.env")
+load_dotenv(dotenv_path=env_path)
 
 # Filter out noisy Pydantic warnings about NotRequired
 warnings.filterwarnings("ignore", message=".*typing.NotRequired.*", category=UserWarning)
@@ -87,7 +93,8 @@ except ImportError:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Startup logic if needed
+    # Startup logic
+    db_module.init_db()
     yield
     # Shutdown logic if needed
     # Explicitly handle potential cancellation during shutdown to avoid noisy logs
@@ -100,6 +107,104 @@ async def lifespan(app: FastAPI):
 app = FastAPI(lifespan=lifespan)
 sessions: Dict[str, Dict] = {}
 checkpointers: Dict[str, Any] = {}
+
+class StreamState:
+    def __init__(self):
+        self.history = [] # List of event strings (data: ...)
+        self.listeners = [] # List of asyncio.Queue
+        self.task = None
+        self.done_event = asyncio.Event()
+        self.status = "idle" # idle, generating, done, error
+
+    async def broadcast(self, event_str):
+        self.history.append(event_str)
+        for q in self.listeners:
+            await q.put(event_str)
+            
+    def add_listener(self):
+        q = asyncio.Queue()
+        # Replay history
+        for h in self.history:
+            q.put_nowait(h)
+        self.listeners.append(q)
+        return q
+
+    def remove_listener(self, q):
+        if q in self.listeners:
+            self.listeners.remove(q)
+
+async def background_generator(sid, agent, history_msgs, config, stream_state, sessions_dict):
+    stream_state.status = "generating"
+    
+    # Update global session status
+    if sid in sessions_dict:
+        sessions_dict[sid]['status'] = 'generating'
+        sessions_dict[sid]['last_active'] = time.time()
+        sessions_dict[sid]['abort_signal'] = False
+        
+    try:
+        async for event in agent.astream_events(
+            {"messages": history_msgs},
+            config=config,
+            version="v1"
+        ):
+            # Check abort signal
+            if sid in sessions_dict and sessions_dict[sid].get('abort_signal'):
+                await stream_state.broadcast(f"data: {json.dumps({'type': 'error', 'content': 'Aborted by user'})}\n\n")
+                break
+                
+            kind = event["event"]
+            if kind == "on_chat_model_stream":
+                content = event["data"]["chunk"].content
+                if content:
+                    await stream_state.broadcast(f"data: {json.dumps({'type': 'chunk', 'content': content})}\n\n")
+            elif kind == "on_tool_start":
+                await stream_state.broadcast(f"data: {json.dumps({
+                    'type': 'tool', 
+                    'id': event['run_id'], 
+                    'name': event['name'],
+                    'status': 'running',
+                    'input': str(event['data'].get('input'))
+                })}\n\n")
+            elif kind == "on_tool_end":
+                await stream_state.broadcast(f"data: {json.dumps({
+                    'type': 'tool', 
+                    'id': event['run_id'], 
+                    'name': event['name'],
+                    'status': 'done',
+                    'output': str(event['data'].get('output'))
+                })}\n\n")
+
+        # Save state logic
+        try:
+             from langchain_core.messages import HumanMessage, ToolMessage
+             snapshot = agent.get_state(config)
+             if snapshot and snapshot.values and 'messages' in snapshot.values:
+                 new_msgs = snapshot.values['messages'][len(history_msgs):]
+                 for m in new_msgs:
+                     role = 'user' if isinstance(m, HumanMessage) else 'assistant'
+                     if isinstance(m, ToolMessage): role = 'tool'
+                     
+                     content = m.content
+                     tool_calls = m.tool_calls if hasattr(m, 'tool_calls') else None
+                     tool_call_id = m.tool_call_id if hasattr(m, 'tool_call_id') else None
+                     
+                     db_module.add_message_db(sid, role, content, tool_calls=tool_calls, tool_call_id=tool_call_id)
+        except Exception as e:
+             print(f"Error saving state: {e}")
+
+        await stream_state.broadcast(f"data: {json.dumps({'type': 'done'})}\n\n")
+        
+    except Exception as e:
+        print(f"Generation error: {e}")
+        await stream_state.broadcast(f"data: {json.dumps({'type': 'error', 'content': str(e)})}\n\n")
+        
+    finally:
+        stream_state.status = "done"
+        stream_state.done_event.set()
+        if sid in sessions_dict:
+            sessions_dict[sid]['status'] = 'idle'
+            sessions_dict[sid]['last_active'] = time.time()
 
 # Default config (load from env or use defaults)
 siliconflow_config = {
@@ -455,6 +560,41 @@ def _get_config_hash(config_data):
     }
     return hashlib.md5(json.dumps(relevant, sort_keys=True).encode()).hexdigest()
 
+def _path_validator(path: Path) -> bool:
+    """Validate that path is within allowed directories (project root)."""
+    try:
+        resolved = path.resolve()
+        cwd = Path.cwd().resolve()
+        
+        # Determine Project Root
+        # Walk up from cwd until we find .git or 'libs' (heuristic for this repo structure)
+        project_root = cwd
+        temp = cwd
+        while temp.parent != temp:
+            # Check for markers
+            if (temp / ".git").exists() or (temp / "libs").exists():
+                project_root = temp
+                # Prefer .git if available
+                if (temp / ".git").exists():
+                    break
+            temp = temp.parent
+            
+        # Allow paths within Project Root
+        if sys.platform == "win32":
+            r_str = str(resolved).lower()
+            pr_str = str(project_root).lower()
+            if r_str == pr_str or r_str.startswith(pr_str + os.sep):
+                return True
+        else:
+            if resolved.is_relative_to(project_root):
+                return True
+                
+        print(f"Path validation failed for: {resolved} (Project Root: {project_root})")
+        return False
+    except Exception as e:
+        print(f"Path validation error: {e}")
+        return False
+
 def _init_agent(assistant_id: str, checkpointer, enable_tools: bool = True, custom_system_prompt: str = None):
     if not siliconflow_config['api_key']:
         raise ValueError("SiliconFlow API key not set")
@@ -490,7 +630,7 @@ def _init_agent(assistant_id: str, checkpointer, enable_tools: bool = True, cust
     project_skills_dir = settings.get_project_skills_dir()
 
     composite_backend = CompositeBackend(
-        default=FilesystemBackend(virtual_mode=False),
+        default=FilesystemBackend(virtual_mode=False, path_validator=_path_validator),
         routes={},
     )
 
@@ -606,24 +746,104 @@ def _init_agent(assistant_id: str, checkpointer, enable_tools: bool = True, cust
 
     return agent
 
+@app.get('/sessions')
+def list_sessions():
+    return db_module.list_sessions_db()
+
 @app.post('/sessions')
 async def create_session(req: Request):
-    sid = _new_id()
-    # Initialize session with logs and config
+    try:
+        body = await req.json()
+    except:
+        body = {}
+    
+    sid = db_module.create_session_db(body)
+    
+    # Initialize runtime state
     sessions[sid] = {
-        'id': sid, 
-        'messages': [],
-        'logs': [],  # Store tool logs here
-        'agent_cache': None, # Cache for compiled agent
-        'config': {
-            'model': siliconflow_config.get('model'),
-            'temperature': 0.7,
-            'middleware_enabled': True
-        }
+        'id': sid,
+        'agent_cache': None,
+        'config': body
     }
-    # Initialize checkpointer
     checkpointers[sid] = InMemorySaver()
     return {'id': sid}
+
+@app.put('/sessions/{sid}')
+async def rename_session(sid: str, req: Request):
+    body = await req.json()
+    name = body.get('name')
+    if not name:
+        return {'error': 'Name is required'}
+    db_module.update_session_db(sid, name=name)
+    return {'ok': True}
+
+@app.delete('/sessions/batch')
+async def delete_sessions_batch(req: Request):
+    try:
+        body = await req.json()
+        ids = body.get('ids', [])
+        if not ids:
+            return {'ok': True, 'count': 0}
+            
+        # 1. Abort any running sessions in the list
+        for sid in ids:
+            if sid in sessions:
+                sessions[sid]['abort_signal'] = True
+        
+        # 2. Delete from DB
+        try:
+            db_module.delete_sessions_batch_db(ids)
+        except Exception as e:
+            print(f"Error deleting batch sessions: {e}")
+            raise HTTPException(status_code=500, detail=str(e))
+            
+        # 3. Cleanup memory and disk
+        for sid in ids:
+            if sid in sessions:
+                del sessions[sid]
+            if sid in checkpointers:
+                del checkpointers[sid]
+                
+            agent_dir = DATA_DIR / "sessions" / sid
+            if agent_dir.exists():
+                try:
+                    shutil.rmtree(agent_dir)
+                except Exception as e:
+                    print(f"Error deleting agent dir {agent_dir}: {e}")
+                    
+        return {'ok': True, 'count': len(ids)}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+@app.delete('/sessions/{sid}')
+async def delete_session(sid: str):
+    # 1. Abort if running
+    if sid in sessions:
+        sessions[sid]['abort_signal'] = True
+        # If there's a stream state, we could try to wait, but for now just signal
+
+    # 2. Delete from DB
+    try:
+        db_module.delete_session_db(sid)
+    except Exception as e:
+        print(f"Error deleting session {sid} from DB: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+    # 3. Cleanup memory
+    if sid in sessions:
+        del sessions[sid]
+    if sid in checkpointers:
+        del checkpointers[sid]
+
+    # 4. Cleanup disk (Agent Directory)
+    agent_dir = DATA_DIR / "sessions" / sid
+    if agent_dir.exists():
+        try:
+            shutil.rmtree(agent_dir)
+        except Exception as e:
+            print(f"Error deleting agent dir {agent_dir}: {e}")
+
+    return {'ok': True}
 
 class MessageRequest(BaseModel):
     content: str
@@ -631,150 +851,226 @@ class MessageRequest(BaseModel):
 
 @app.post('/sessions/{sid}/messages')
 async def post_message(sid: str, req: MessageRequest):
-    if sid not in sessions:
+    # Verify session exists
+    session_data = db_module.get_session_db(sid)
+    if not session_data:
         raise HTTPException(status_code=404, detail="Session not found")
+    
+    # Update runtime state
+    if sid not in sessions:
+        sessions[sid] = {'id': sid, 'agent_cache': None, 'config': session_data.get('config', {})}
     
     sessions[sid]['pending_input'] = req.content
     sessions[sid]['enable_tools'] = req.tools
-    sessions[sid]['messages'].append({'role': 'user', 'content': req.content})
+    
+    # Save user message to DB
+    db_module.add_message_db(sid, 'user', req.content)
+    
+    # Auto-rename if first message (or name is default)
+    current_name = session_data.get('name')
+    if current_name == 'New Session' or current_name == f"Session {sid}":
+        # Use first 30 chars of content
+        new_name = req.content[:30]
+        if len(req.content) > 30:
+            new_name += "..."
+        db_module.update_session_db(sid, name=new_name)
+        
     return {'ok': True}
+
+@app.get('/sessions/{sid}/status')
+def get_session_status(sid: str):
+    if sid in sessions:
+        sess = sessions[sid]
+        return {
+            "status": sess.get('status', 'idle'),
+            "last_active": sess.get('last_active', 0)
+        }
+    return {"status": "idle", "last_active": 0}
+
+@app.post('/sessions/{sid}/abort')
+def abort_session(sid: str):
+    if sid in sessions:
+        sessions[sid]['abort_signal'] = True
+        return {"ok": True}
+    return JSONResponse(status_code=404, content={"error": "Session not active"})
 
 @app.get('/sessions/{sid}/stream')
 async def stream_session(sid: str):
+    # Ensure session loaded
+    session_db = db_module.get_session_db(sid)
+    if not session_db:
+         raise HTTPException(status_code=404, detail="Session not found")
+         
     if sid not in sessions:
-        raise HTTPException(status_code=404, detail="Session not found")
-    
+        sessions[sid] = {'id': sid, 'agent_cache': None, 'config': session_db.get('config', {})}
+        
     session = sessions[sid]
+    
+    # Initialize StreamState if not present
+    if 'stream_state' not in session:
+        session['stream_state'] = StreamState()
+        
+    stream_state = session['stream_state']
+    
+    # Check if we need to start a new generation
     pending_input = session.get('pending_input')
-    enable_tools = session.get('enable_tools', True)
     
-    # If no pending input, maybe it's a reconnection?
-    # For now, we only support streaming response to a new message.
-    if not pending_input:
-         # Send a keep-alive or ping to keep connection open if frontend expects it
-         # But usually frontend connects ONLY after sending a message.
-         # If we return immediately, frontend might think it's done.
-         # We'll just return a ping and done.
-         async def empty_gen():
-             yield f"data: {json.dumps({'type': 'ping'})}\n\n"
-             yield f"data: {json.dumps({'type': 'done'})}\n\n"
-         return StreamingResponse(empty_gen(), media_type="text/event-stream")
-
-    session['pending_input'] = None
-    
-    t0 = time.time()
-    cp = checkpointers.get(sid)
-    if not cp:
+    if pending_input and stream_state.status != 'generating':
+        # Prepare to start background task
+        
+        # Reset stream state for new run
+        session['stream_state'] = StreamState()
+        stream_state = session['stream_state']
+        
+        enable_tools = session.get('enable_tools', True)
+        session['pending_input'] = None # Consume input
+        
+        # Setup checkpointer
         cp = InMemorySaver()
         checkpointers[sid] = cp
         
-    print(f"[TIMING] Checkpointer setup: {time.time() - t0:.4f}s")
-    
-    t1 = time.time()
-    # Check if we can reuse cached agent
-    agent = None
-    # Simple cache key based on enable_tools
-    cache_key = f"{enable_tools}_{session['config'].get('system_prompt')}"
-    
-    if session.get('agent_cache') and session.get('agent_cache_key') == cache_key:
-        print("[TIMING] Using cached agent")
-        agent = session['agent_cache']
-    else:
-        print("[TIMING] Initializing new agent")
+        # Load history
+        db_messages = session_db.get('messages', [])
+        history_msgs = []
+        from langchain_core.messages import HumanMessage, AIMessage, ToolMessage
+        for m in db_messages:
+            role = m['role']
+            content = m['content']
+            if role == 'user':
+                history_msgs.append(HumanMessage(content=content))
+            elif role == 'assistant':
+                msg = AIMessage(content=content)
+                if m.get('tool_calls'): msg.tool_calls = m['tool_calls']
+                history_msgs.append(msg)
+            elif role == 'tool':
+                history_msgs.append(ToolMessage(content=content, tool_call_id=m.get('tool_call_id')))
+                
+        # Init Agent
         agent = _init_agent(
             assistant_id=sid,
             checkpointer=cp,
             enable_tools=enable_tools,
             custom_system_prompt=session['config'].get('system_prompt')
         )
-        session['agent_cache'] = agent
-        session['agent_cache_key'] = cache_key
-    
-    print(f"[TIMING] Agent init: {time.time() - t1:.4f}s")
+        
+        config = {"configurable": {"thread_id": sid}, "recursion_limit": 100}
+        
+        # Start Background Task
+        stream_state.task = asyncio.create_task(
+            background_generator(sid, agent, history_msgs, config, stream_state, sessions)
+        )
+    elif not pending_input and stream_state.status != 'generating' and not stream_state.history:
+         async def empty_gen():
+             yield f"data: {json.dumps({'type': 'ping'})}\n\n"
+             yield f"data: {json.dumps({'type': 'done'})}\n\n"
+         return StreamingResponse(empty_gen(), media_type="text/event-stream")
+
+    # Subscribe to the stream (whether new or existing)
+    queue = stream_state.add_listener()
     
     async def event_generator():
         try:
-            config = {"configurable": {"thread_id": sid}}
-            
-            t2 = time.time()
-            print(f"[TIMING] Starting stream events")
-            
-            async for event in agent.astream_events(
-                {"messages": [HumanMessage(content=pending_input)]},
-                config=config,
-                version="v1"
-            ):
-                kind = event["event"]
+            while True:
+                # Wait for event
+                event = await queue.get()
+                yield event
                 
-                if kind == "on_chat_model_stream":
-                    content = event["data"]["chunk"].content
-                    if content:
-                        yield f"data: {json.dumps({'type': 'chunk', 'content': content})}\n\n"
-                        
-                        # Append to assistant message in session for context endpoint
-                        # Note: This is a bit hacky, proper way is to read from checkpointer/history after run
-                        # But for real-time UI update we might not need to update session['messages'] incrementally
-                        # We'll update it at the end or let the graph handle it.
-                
-                elif kind == "on_tool_start":
-                    yield f"data: {json.dumps({
-                        'type': 'tool', 
-                        'id': event['run_id'], 
-                        'name': event['name'],
-                        'status': 'running',
-                        'input': str(event['data'].get('input'))
-                    })}\n\n"
-                    
-                elif kind == "on_tool_end":
-                     yield f"data: {json.dumps({
-                        'type': 'tool', 
-                        'id': event['run_id'], 
-                        'name': event['name'],
-                        'status': 'done',
-                        'output': str(event['data'].get('output'))
-                    })}\n\n"
-                    
-            # Done
-            yield f"data: {json.dumps({'type': 'done'})}\n\n"
+                # Check if done
+                try:
+                    if event.startswith("data: "):
+                        data_str = event[6:].strip()
+                        if data_str:
+                            data = json.loads(data_str)
+                            if data.get('type') in ('done', 'error'):
+                                break
+                except:
+                    pass
+        except asyncio.CancelledError:
+            pass
+        finally:
+            stream_state.remove_listener(queue)
             
-            # Update session history from checkpointer state
-            snapshot = agent.get_state(config)
-            if snapshot and snapshot.values and 'messages' in snapshot.values:
-                # Sync our simple session['messages'] with graph state
-                # This ensures /context endpoint returns full history
-                msgs = snapshot.values['messages']
-                formatted = []
-                for m in msgs:
-                    role = 'user'
-                    if m.type == 'ai': role = 'assistant'
-                    elif m.type == 'system': role = 'system'
-                    elif m.type == 'tool': role = 'tool'
-                    formatted.append({'role': role, 'content': str(m.content)})
-                session['messages'] = formatted
-
-        except Exception as e:
-            import traceback
-            traceback.print_exc()
-            yield f"data: {json.dumps({'type': 'error', 'content': str(e)})}\n\n"
-            yield f"data: {json.dumps({'type': 'done'})}\n\n"
-
     return StreamingResponse(event_generator(), media_type="text/event-stream")
 
 @app.get('/sessions/{sid}/context')
 async def get_session_context(sid: str):
-    s = sessions.get(sid)
-    if not s:
-        return JSONResponse({'error': 'Session not found'}, status_code=404)
+    session = db_module.get_session_db(sid)
+    if not session:
+         return JSONResponse({'error': 'Session not found'}, status_code=404)
     
-    # Extract chat history formatted for frontend
-    history = []
-    for m in s.get('messages', []):
-        history.append({
-            'role': m['role'],
-            'content': m['content'][:100] + '...' if len(m['content']) > 100 else m['content']
-        })
-        
     return {
-        'history': history,
-        'logs_count': len(s.get('logs', []))
+        'history': session.get('messages', []),
+        'logs_count': len(session.get('logs', []))
     }
+
+@app.get('/sessions/{sid}/export')
+def export_session(sid: str):
+    session = db_module.get_session_db(sid)
+    if not session:
+         raise HTTPException(404, "Session not found")
+    messages = session.get('messages', [])
+    export_data = {
+        "messages": [
+            {"role": "system", "content": session.get('config', {}).get('system_prompt', '') or "You are a helpful assistant."}
+        ]
+    }
+    for m in messages:
+        msg_obj = {"role": m['role'], "content": m['content']}
+        if m.get('tool_calls'): msg_obj['tool_calls'] = m['tool_calls']
+        if m.get('tool_call_id'): msg_obj['tool_call_id'] = m['tool_call_id']
+        export_data['messages'].append(msg_obj)
+    return export_data
+
+@app.post('/sessions/migrate')
+def migrate_sessions():
+    sessions_dir = DATA_DIR / "sessions"
+    count = 0
+    if not sessions_dir.exists():
+        return {"migrated": 0, "msg": "No sessions directory found"}
+        
+    for f in sessions_dir.glob("*.json"):
+        try:
+            # Skip already migrated files if renamed (though we rename to .json.migrated which won't match *.json)
+            data = json.loads(f.read_text(encoding='utf-8'))
+            sid = data.get('id', f.stem)
+            
+            # Check if exists
+            if db_module.get_session_db(sid):
+                continue
+                
+            # Create session
+            config = data.get('config', {})
+            name = data.get('name', f"Session {sid}")
+            # Ensure created_at matches original if possible? 
+            # db module uses current time. We could modify db module to accept created_at but let's keep it simple.
+            
+            db_module.create_session_db(config, sid=sid, name=name)
+            
+            # Add messages
+            for msg in data.get('messages', []):
+                role = msg.get('role', 'user')
+                content = msg.get('content', '')
+                tool_calls = msg.get('tool_calls')
+                tool_call_id = msg.get('tool_call_id')
+                
+                # If tool_calls is string (old format?), parse it? 
+                # Assuming standard format
+                
+                db_module.add_message_db(sid, role, content, tool_calls=tool_calls, tool_call_id=tool_call_id)
+                
+            # Add logs
+            for log in data.get('logs', []):
+                content = log.get('content', '') if isinstance(log, dict) else str(log)
+                db_module.add_log_db(sid, content)
+                
+            count += 1
+            # Rename file to mark as migrated
+            try:
+                f.rename(f.with_suffix('.json.migrated'))
+            except:
+                pass # Might fail on windows if open
+            
+        except Exception as e:
+            print(f"Failed to migrate {f}: {e}")
+            
+    return {"migrated": count}

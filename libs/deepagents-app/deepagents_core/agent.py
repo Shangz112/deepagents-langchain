@@ -6,7 +6,7 @@ from pathlib import Path
 
 from deepagents import create_deep_agent
 from deepagents.backends import CompositeBackend
-from deepagents.backends.filesystem import FilesystemBackend
+from deepagents.backends.filesystem import FilesystemBackend, strict_project_validator
 from deepagents.backends.sandbox import SandboxBackendProtocol
 from langchain.agents.middleware import (
     InterruptOnConfig,
@@ -184,7 +184,14 @@ When using the write_todos tool:
    - If they want changes, adjust the plan accordingly
 6. Update todo status promptly as you complete each item
 
-The todo list is a planning tool - use it judiciously to avoid overwhelming the user with excessive task tracking."""
+The todo list is a planning tool - use it judiciously to avoid overwhelming the user with excessive task tracking.
+
+### Compliance and Safety
+
+You must adhere to the following safety and compliance guidelines:
+1. Do not generate content that is political, sensitive, pornographic, discriminatory, religious, human rights-related, or related to controversial social issues in any language or forms.
+2. If a user asks about such topics, politely refuse to answer and redirect the conversation to technical or safe subjects.
+3. Ensure all code and content generated is safe, ethical, and follows standard legal and professional guidelines."""
     )
 
 
@@ -324,6 +331,7 @@ def _add_interrupt_on() -> dict[str, InterruptOnConfig]:
     }
 
 
+
 def create_cli_agent(
     model: str | BaseChatModel,
     assistant_id: str,
@@ -406,7 +414,7 @@ def create_cli_agent(
     if sandbox is None:
         # ========== LOCAL MODE ==========
         composite_backend = CompositeBackend(
-            default=FilesystemBackend(),  # Current working directory
+            default=FilesystemBackend(path_validator=strict_project_validator),  # Current working directory
             routes={},  # No virtualization - use real paths
         )
 

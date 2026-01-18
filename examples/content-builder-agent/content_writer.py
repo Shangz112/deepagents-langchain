@@ -33,8 +33,10 @@ from rich.panel import Panel
 from rich.spinner import Spinner
 from rich.text import Text
 
-from deepagents import create_deep_agent
-from deepagents.backends import FilesystemBackend
+from deepagents import create_deep_agent, load_subagents
+from deepagents.backends.filesystem import FilesystemBackend, strict_project_validator
+
+from .tools import generate_cover, generate_social_image
 
 EXAMPLE_DIR = Path(__file__).parent
 console = Console()

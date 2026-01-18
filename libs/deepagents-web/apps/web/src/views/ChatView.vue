@@ -51,7 +51,7 @@
     <div class="flex-1 overflow-hidden relative">
       
       <!-- Chat View -->
-      <div v-show="activeTab === 'Chat'" class="h-full flex flex-col min-h-0 relative">
+      <div v-show="activeTab === 'Chat'" class="absolute inset-0 flex flex-col min-h-0 bg-[var(--bg-app)]">
         
         <!-- Welcome Screen (Bisheng Style) -->
         <div v-if="chatStore.messages.length === 0" class="flex-1 z-0 flex flex-col items-center p-8 text-center select-none animate-in fade-in zoom-in duration-500">
@@ -186,7 +186,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted, onUnmounted, computed } from 'vue'
+import { ref, reactive, onMounted, onUnmounted, computed, watch } from 'vue'
 import axios from 'axios'
 import { sessionStore, chatStore } from '../store'
 import MessageList from '../components/chat/MessageList.vue'
@@ -200,9 +200,83 @@ const sessionError = ref<boolean>(false)
 let currentEventSource: EventSource | null = null
 const quickStarters = ref<any[]>([])
 
+// Watch for external session changes (e.g. from Sidebar)
+watch(() => sessionStore.sessionId, async (newId) => {
+  if (newId && newId !== sessionId.value) {
+    sessionId.value = newId
+    await loadSessionHistory(newId)
+  }
+})
+
+async function loadSessionHistory(sid: string) {
+  try {
+    const res = await axios.get(`/api/v1/chat/sessions/${sid}/context`)
+    if (res.data && res.data.history) {
+       // Reconstruct messages and tool events
+       const messages: any[] = []
+       const toolOutputs: Record<string, any> = {}
+       
+       // First pass: index tool outputs
+       res.data.history.forEach((m: any) => {
+         if (m.role === 'tool' && m.tool_call_id) {
+           toolOutputs[m.tool_call_id] = m
+         }
+       })
+
+       // Second pass: build messages
+       res.data.history.forEach((m: any, idx: number) => {
+         // Skip tool messages as they are folded into assistant messages or displayed differently
+         if (m.role === 'tool') return
+
+         const msg: any = {
+           id: `${sid}-${idx}`,
+           role: m.role,
+           content: m.content,
+           timestamp: Date.now() // Estimate or use stored
+         }
+
+         if (m.role === 'assistant' && m.tool_calls) {
+           msg.toolEvents = m.tool_calls.map((tc: any) => {
+             const outputMsg = toolOutputs[tc.id]
+             return {
+               id: tc.id,
+               name: tc.name,
+               status: outputMsg ? 'completed' : 'in_progress',
+               input: tc.args,
+               output: outputMsg ? outputMsg.content : undefined,
+               timestamp: Date.now()
+             }
+           })
+         }
+         
+         messages.push(msg)
+       })
+       
+       chatStore.messages = messages
+       
+       // Always check backend status to ensure UI consistency
+       // This handles cases where local sessionManager state is stale (e.g. page refresh)
+       // or when switching between sessions that might be generating in background.
+       await chatStore.checkSessionStatus(sid)
+    } else {
+       chatStore.messages = []
+    }
+  } catch (e: any) {
+    console.error('Failed to load history', e)
+    if (e.response && e.response.status === 404) {
+      console.warn('Session not found, resetting session ID')
+      sessionStore.sessionId = null
+      sessionId.value = null
+      ensureSession()
+      return
+    }
+    chatStore.messages = []
+  }
+}
+
 onMounted(async () => {
     try {
-        const r = await axios.get('/api/v1/prompts/quick-starters')
+        const r = await axios.get('/api/v1/chat/prompts/quick-starters')
         quickStarters.value = r.data
     } catch (e) {
         console.error('Failed to load quick starters', e)
@@ -274,6 +348,10 @@ async function ensureSession(retryCount = 0) {
   // Check if store already has a session
   if (sessionStore.sessionId) {
       sessionId.value = sessionStore.sessionId
+      // Reload if store is empty OR belongs to a different session
+      if (chatStore.messages.length === 0 || chatStore.currentSessionId !== sessionId.value) {
+          await loadSessionHistory(sessionId.value)
+      }
       return
   }
 
@@ -326,14 +404,15 @@ function debugTool(toolId: string) {
 }
 
 async function exportDataset() {
+    if (!sessionId.value) return
     try {
-        const r = await axios.get('/api/v1/feedback/export')
+        const r = await axios.get(`/api/v1/chat/sessions/${sessionId.value}/export`)
         // Trigger download
         const blob = new Blob([JSON.stringify(r.data, null, 2)], { type: 'application/json' })
         const url = URL.createObjectURL(blob)
         const a = document.createElement('a')
         a.href = url
-        a.download = `dataset_export_${Date.now()}.json`
+        a.download = `dataset_export_${sessionId.value}_${Date.now()}.json`
         document.body.appendChild(a)
         a.click()
         document.body.removeChild(a)

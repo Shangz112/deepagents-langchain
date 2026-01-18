@@ -9,6 +9,8 @@ from pathlib import Path
 
 import wcmatch.glob as wcglob
 
+from typing import Callable
+
 from deepagents.backends.protocol import (
     BackendProtocol,
     EditResult,
@@ -25,6 +27,34 @@ from deepagents.backends.utils import (
 )
 
 
+def strict_project_validator(path: Path) -> bool:
+    """Validate that path is within allowed directories (project root and assemble_agents)."""
+    try:
+        resolved = path.resolve()
+        cwd = Path.cwd().resolve()
+        
+        # 1. Allow paths within current working directory (project root)
+        if resolved.is_relative_to(cwd):
+            return True
+            
+        # 2. Allow paths within assemble_agents
+        # Search up for libs/assemble_agents
+        root = cwd
+        while root.parent != root:
+            assemble_agents = root / "libs" / "assemble_agents"
+            if assemble_agents.exists():
+                if resolved.is_relative_to(assemble_agents.resolve()):
+                    return True
+            
+            if (root / ".git").exists(): 
+                break
+            root = root.parent
+            
+        return False
+    except Exception:
+        return False
+
+
 class FilesystemBackend(BackendProtocol):
     """Backend that reads and writes files directly from the filesystem.
 
@@ -38,6 +68,7 @@ class FilesystemBackend(BackendProtocol):
         root_dir: str | Path | None = None,
         virtual_mode: bool = False,
         max_file_size_mb: int = 10,
+        path_validator: Callable[[Path], bool] | None = None,
     ) -> None:
         """Initialize filesystem backend.
 
@@ -56,10 +87,15 @@ class FilesystemBackend(BackendProtocol):
                 grep's Python fallback search.
 
                 Files exceeding this limit are skipped during search. Defaults to 10 MB.
+            path_validator: Optional callback to validate resolved paths.
+                
+                If provided, this function is called with the resolved absolute path.
+                If it returns False, a ValueError is raised.
         """
         self.cwd = Path(root_dir).resolve() if root_dir else Path.cwd()
         self.virtual_mode = virtual_mode
         self.max_file_size_bytes = max_file_size_mb * 1024 * 1024
+        self.path_validator = path_validator
 
     def _resolve_path(self, key: str) -> Path:
         """Resolve a file path with security checks.
@@ -90,12 +126,20 @@ class FilesystemBackend(BackendProtocol):
                 full.relative_to(self.cwd)
             except ValueError:
                 raise ValueError(f"Path:{full} outside root directory: {self.cwd}") from None
+            if self.path_validator and not self.path_validator(full):
+                raise ValueError(f"Path not allowed by validator: {full}")
             return full
 
         path = Path(key)
         if path.is_absolute():
-            return path
-        return (self.cwd / path).resolve()
+            resolved = path
+        else:
+            resolved = (self.cwd / path).resolve()
+            
+        if self.path_validator and not self.path_validator(resolved):
+            raise ValueError(f"Path not allowed by validator: {resolved}")
+            
+        return resolved
 
     def ls_info(self, path: str) -> list[FileInfo]:
         """List files and directories in the specified directory (non-recursive).

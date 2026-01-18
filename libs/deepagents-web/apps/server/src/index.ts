@@ -1,5 +1,5 @@
+import './config_loader'
 import path from 'path'
-
 import express from 'express'
 import cors from 'cors'
 import chat from './routes/chat'

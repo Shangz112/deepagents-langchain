@@ -6,12 +6,36 @@ export async function createSession() {
   const r = await fetch(`${PY_URL}/sessions`, { method: 'POST' })
   return r.json()
 }
+export async function listSessions() {
+  const r = await fetch(`${PY_URL}/sessions`)
+  return r.json()
+}
 export async function getSession(id: string) {
   const r = await fetch(`${PY_URL}/sessions/${id}`)
   return r.json()
 }
 export async function deleteSession(id: string) {
   const r = await fetch(`${PY_URL}/sessions/${id}`, { method: 'DELETE' })
+  return r.json()
+}
+export async function deleteSessionsBatch(ids: string[]) {
+  const r = await fetch(`${PY_URL}/sessions/batch`, { 
+    method: 'DELETE',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ ids })
+  })
+  return r.json()
+}
+export async function updateSessionMeta(id: string, meta: any) {
+  const r = await fetch(`${PY_URL}/sessions/${id}`, { 
+    method: 'PUT',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(meta)
+  })
+  return r.json()
+}
+export async function exportSession(id: string) {
+  const r = await fetch(`${PY_URL}/sessions/${id}/export`)
   return r.json()
 }
 export async function sendMessage(id: string, content: string, tools?: any) {

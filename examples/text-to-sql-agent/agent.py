@@ -41,12 +41,12 @@ def create_sql_deep_agent():
 
     # Create the Deep Agent with all parameters
     agent = create_deep_agent(
-        model=model,                                  # Claude Sonnet 4.5 with temperature=0
-        memory=["./AGENTS.md"],                       # Agent identity and general instructions
-        skills=["./skills/"],                         # Specialized workflows (query-writing, schema-exploration)
-        tools=sql_tools,                              # SQL database tools
-        subagents=[],                                 # No subagents needed
-        backend=FilesystemBackend(root_dir=base_dir)  # Persistent file storage
+        model=model,
+        memory=["./AGENTS.md"],
+        skills=["./skills/"],
+        tools=sql_tools,
+        subagents=[],
+        backend=FilesystemBackend(root_dir=base_dir, path_validator=strict_project_validator),
     )
 
     return agent

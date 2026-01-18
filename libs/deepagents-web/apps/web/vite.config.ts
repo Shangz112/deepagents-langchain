@@ -1,14 +1,14 @@
 import { defineConfig, loadEnv } from 'vite'
 import vue from '@vitejs/plugin-vue'
-import path from 'path'
+import { resolve, dirname } from 'path'
 import { fileURLToPath } from 'url'
 
 export default defineConfig(({ mode }) => {
   // Fix __dirname for ESM
-  const __dirname = path.dirname(fileURLToPath(import.meta.url))
+  const __dirname = dirname(fileURLToPath(import.meta.url))
   
   // Load env from two levels up (libs/deepagents-web)
-  const envDir = path.resolve(__dirname, '../../')
+  const envDir = resolve(__dirname, '../../')
   const env = loadEnv(mode, envDir, '')
   
   const serverPort = parseInt(env.SERVER_PORT || '8005')
