@@ -5,11 +5,11 @@
 
 api_keys:
   # SiliconFlow API Key (for DeepSeek etc.)
-  siliconflow: "sk-zyhbakslfsnztzpbyrmopbzvzuajofmmsedpmfrgnfpqsrfn"
+  siliconflow: ""
   # Tavily Search API Key
-  tavily: "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"
+  tavily: ""
   # Bocha Search API Key
-  bocha: "sk-cad437042e6e4546822cfe02959809cf"
+  bocha: ""
 
 models:
   default:

@@ -24,7 +24,7 @@ from deepagents_core.config import COLORS, config, console, get_default_coding_i
 from deepagents_core.integrations.sandbox_factory import get_default_working_dir
 from deepagents_core.shell import ShellMiddleware
 from deepagents_core.skills import SkillsMiddleware
-from deepagents_core.mbse_agent.agent import create_mbse_agent
+# from deepagents_core.mbse_agent.agent import create_mbse_agent
 
 
 def list_agents() -> None:
@@ -368,20 +368,21 @@ def create_cli_agent(
 
     # MBSE Agent Integration
     if assistant_id == "mbse_agent":
-        if sandbox is None:
-            composite_backend = CompositeBackend(
-                default=FilesystemBackend(),
-                routes={},
-            )
-        else:
-            composite_backend = CompositeBackend(
-                default=sandbox,
-                routes={},
-            )
+        raise NotImplementedError("MBSE Agent is not yet implemented.")
+        # if sandbox is None:
+        #     composite_backend = CompositeBackend(
+        #         default=FilesystemBackend(),
+        #         routes={},
+        #     )
+        # else:
+        #     composite_backend = CompositeBackend(
+        #         default=sandbox,
+        #         routes={},
+        #     )
         
-        # Initialize MBSE Agent
-        agent_graph = create_mbse_agent()
-        return agent_graph, composite_backend
+        # # Initialize MBSE Agent
+        # agent_graph = create_mbse_agent()
+        # return agent_graph, composite_backend
 
     # Setup agent directory for persistent memory (if enabled)
     if enable_memory or enable_skills:

@@ -124,7 +124,7 @@ class RAGService:
         logger.error("Neither Milvus nor ChromaDB available. RAG disabled.")
         return None
 
-    def ingest_file(self, file_path: str, original_filename: str, template: str = "default") -> dict:
+    def ingest_file(self, file_path: str, original_filename: str, template: str = "default", source_id: Optional[str] = None) -> dict:
         """
         Ingest a file into the knowledge base.
         
@@ -132,6 +132,7 @@ class RAGService:
             file_path (str): Local path to the file.
             original_filename (str): Name of the file as uploaded by user.
             template (str): Processing template to use (e.g. 'default', 'scientific_paper').
+            source_id (str, optional): Unique ID for the source. If provided, used as 'source' metadata.
             
         Returns:
             dict: Result status including chunk count or error message.
@@ -230,7 +231,9 @@ class RAGService:
             return {"error": "No chunks generated"}
 
         # 3. Vector Store Insertion
-        metadatas = [{"source": original_filename, "chunk_index": i} for i in range(len(chunks))]
+        # Use source_id if provided, otherwise fallback to filename
+        source_key = source_id if source_id else original_filename
+        metadatas = [{"source": source_key, "chunk_index": i} for i in range(len(chunks))]
         try:
             self.vector_store.ingest(chunks, metadatas)
         except Exception as e:
@@ -328,14 +331,15 @@ class RAGService:
 # Global instance
 _rag_service = None
 
-def get_rag_service(api_key=None, base_url=None):
+def get_rag_service(api_key=None, base_url=None): 
     """
     Singleton accessor for RAGService.
     Ensures only one instance of the Vector Store connection is active.
     """
     global _rag_service
     if _rag_service is None:
-        db_path = Path(__file__).parent.parent / "deepagents_data" / "vectordb"
+        # User requested override to assemble_agents directory
+        db_path = Path(__file__).parent.parent.parent / "rag_data" / "vectordb"
         db_path.mkdir(parents=True, exist_ok=True)
         _rag_service = RAGService(str(db_path), api_key, base_url)
     return _rag_service

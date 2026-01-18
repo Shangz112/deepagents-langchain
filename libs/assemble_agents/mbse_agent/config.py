@@ -1,9 +1,8 @@
 import os
-from deepagents_core.config import _system_api_keys, _system_env
 
 # SiliconFlow Configuration
-SILICONFLOW_API_KEY = os.getenv("OPENAI_API_KEY") or _system_api_keys.get("siliconflow")
-SILICONFLOW_BASE_URL = os.getenv("OPENAI_API_BASE") or "https://api.siliconflow.cn/v1"
+SILICONFLOW_API_KEY = os.getenv("SILICONFLOW_API_KEY") or os.getenv("OPENAI_API_KEY") or ""
+SILICONFLOW_BASE_URL = os.getenv("SILICONFLOW_BASE_URL") or os.getenv("OPENAI_API_BASE") or "https://api.siliconflow.cn/v1"
 
 # Model Configuration
 MODEL_NAME = os.getenv("MODEL_NAME") or "deepseek-ai/DeepSeek-V3.2"

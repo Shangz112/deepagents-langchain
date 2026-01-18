@@ -7,3 +7,4 @@ networkx==3.3
 pandas==2.2.3
 typing-extensions==4.12.2
 python-json-logger==2.0.7
+python-dotenv==1.0.1

@@ -239,7 +239,13 @@ class Settings:
         Returns:
             Path to ~/.deepagents
         """
-        return Path.home() / ".deepagents"
+        # User requested override to specific directory via relative path
+        # config.py is in libs/deepagents-cli/deepagents_cli/config.py
+        # We want to reach libs/assemble_agents
+        # parent = deepagents_cli
+        # parent.parent = deepagents-cli
+        # parent.parent.parent = libs
+        return Path(__file__).resolve().parent.parent.parent / "assemble_agents"
 
     def get_user_agent_md_path(self, agent_name: str) -> Path:
         """Get user-level AGENTS.md path for a specific agent.
@@ -252,7 +258,7 @@ class Settings:
         Returns:
             Path to ~/.deepagents/{agent_name}/AGENTS.md
         """
-        return Path.home() / ".deepagents" / agent_name / "AGENTS.md"
+        return self.user_deepagents_dir / agent_name / "AGENTS.md"
 
     def get_project_agent_md_path(self) -> Path | None:
         """Get project-level AGENTS.md path.
@@ -289,7 +295,7 @@ class Settings:
                 "Agent names can only contain letters, numbers, hyphens, underscores, and spaces."
             )
             raise ValueError(msg)
-        return Path.home() / ".deepagents" / agent_name
+        return self.user_deepagents_dir / agent_name
 
     def ensure_agent_dir(self, agent_name: str) -> Path:
         """Ensure the global agent directory exists and return its path.

@@ -2,84 +2,28 @@
 
 import os
 import re
-import sys
 import uuid
 from dataclasses import dataclass
 from pathlib import Path
 
 import dotenv
-import yaml
 from rich.console import Console
 
 from deepagents_core._version import __version__
 
 dotenv.load_dotenv()
 
-SYSTEM_CONFIG_PATH = Path.home() / ".deepagents" / "config.yaml"
-
-
-def load_system_config() -> dict:
-    """Load configuration from multiple sources.
-    
-    Priority (Low to High):
-    1. ~/.deepagents/config.yaml
-    2. Project root config.yaml (heuristic)
-    3. Current directory config.yaml
-    """
-    config = {"api_keys": {}, "env": {}, "models": {}}
-    
-    # Candidate paths (in order of priority: Global -> Project -> Local)
-    paths = [SYSTEM_CONFIG_PATH]
-    
-    # Add potential project/local paths
-    try:
-        cwd = Path.cwd()
-        paths.append(cwd.parent.parent / "config.yaml") # Grandparent (e.g. project root from libs/cli)
-        paths.append(cwd / "config.yaml")             # Current dir
-    except Exception:
-        pass
-
-    for path in paths:
-        if not path.exists():
-            continue
-        try:
-            with open(path, "r", encoding="utf-8") as f:
-                loaded = yaml.safe_load(f) or {}
-                
-                # Merge api_keys
-                if "api_keys" in loaded:
-                    config["api_keys"].update(loaded["api_keys"])
-                
-                # Merge env
-                if "env" in loaded:
-                    config["env"].update(loaded["env"])
-                    
-                # Merge models
-                if "models" in loaded:
-                    config["models"].update(loaded["models"])
-        except Exception:
-            pass
-            
-    return config
-
-
-# Load system config once at module level
-_system_config = load_system_config()
-_system_api_keys = _system_config.get("api_keys", {})
-_system_env = _system_config.get("env", {})
-_system_models = _system_config.get("models", {})
-
-DEFAULT_SILICONFLOW_KEY = "sk-zyhbakslfsnztzpbyrmopbzvzuajofmmsedpmfrgnfpqsrfn"
-DEFAULT_TAVILY_KEY = "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"
-DEFAULT_BOCHA_KEY = "sk-cad437042e6e4546822cfe02959809cf"
-DEFAULT_MODEL_PROVIDER = _system_models.get("default", {}).get("provider", "siliconflow")
-DEFAULT_MODEL_NAME = _system_models.get("default", {}).get("name", "deepseek-ai/DeepSeek-V3")
+DEFAULT_SILICONFLOW_KEY = os.getenv("SILICONFLOW_API_KEY", "")
+DEFAULT_TAVILY_KEY = os.getenv("TAVILY_API_KEY", "")
+DEFAULT_BOCHA_KEY = os.getenv("BOCHA_API_KEY", "")
+DEFAULT_MODEL_PROVIDER = os.getenv("DEFAULT_MODEL_PROVIDER", "siliconflow")
+DEFAULT_MODEL_NAME = os.getenv("DEFAULT_MODEL_NAME", "deepseek-ai/DeepSeek-V3")
 
 # CRITICAL: Override LANGSMITH_PROJECT to route agent traces to separate project
 # LangSmith reads LANGSMITH_PROJECT at invocation time, so we override it here
 # and preserve the user's original value for shell commands
-_deepagents_project = os.environ.get("DEEPAGENTS_LANGSMITH_PROJECT") or _system_env.get("DEEPAGENTS_LANGSMITH_PROJECT", "deepagents")
-_original_langsmith_project = os.environ.get("LANGSMITH_PROJECT") or _system_env.get("LANGSMITH_PROJECT", "default")
+_deepagents_project = os.environ.get("DEEPAGENTS_LANGSMITH_PROJECT", "deepagents")
+_original_langsmith_project = os.environ.get("LANGSMITH_PROJECT", "default")
 if _deepagents_project:
     # Override LANGSMITH_PROJECT for agent traces
     os.environ["LANGSMITH_PROJECT"] = _deepagents_project
@@ -240,19 +184,19 @@ class Settings:
             Settings instance with detected configuration
         """
         # Detect API keys
-        openai_key = os.environ.get("OPENAI_API_KEY") or _system_api_keys.get("openai")
-        anthropic_key = os.environ.get("ANTHROPIC_API_KEY") or _system_api_keys.get("anthropic")
-        google_key = os.environ.get("GOOGLE_API_KEY") or _system_api_keys.get("google")
-        siliconflow_key = os.environ.get("SILICONFLOW_API_KEY") or _system_api_keys.get("siliconflow") or DEFAULT_SILICONFLOW_KEY
-        tavily_key = os.environ.get("TAVILY_API_KEY") or _system_api_keys.get("tavily") or DEFAULT_TAVILY_KEY
-        bocha_key = os.environ.get("BOCHA_API_KEY") or _system_api_keys.get("bocha") or DEFAULT_BOCHA_KEY
+        openai_key = os.environ.get("OPENAI_API_KEY")
+        anthropic_key = os.environ.get("ANTHROPIC_API_KEY")
+        google_key = os.environ.get("GOOGLE_API_KEY")
+        siliconflow_key = os.environ.get("SILICONFLOW_API_KEY") or DEFAULT_SILICONFLOW_KEY
+        tavily_key = os.environ.get("TAVILY_API_KEY") or DEFAULT_TAVILY_KEY
+        bocha_key = os.environ.get("BOCHA_API_KEY") or DEFAULT_BOCHA_KEY
 
         # Detect LangSmith configuration
         # DEEPAGENTS_LANGSMITH_PROJECT: Project for deepagents agent tracing
         # user_langchain_project: User's ORIGINAL LANGSMITH_PROJECT (before override)
         # Note: LANGSMITH_PROJECT was already overridden at module import time (above)
         # so we use the saved original value, not the current os.environ value
-        deepagents_langchain_project = os.environ.get("DEEPAGENTS_LANGSMITH_PROJECT") or _system_env.get("DEEPAGENTS_LANGSMITH_PROJECT")
+        deepagents_langchain_project = os.environ.get("DEEPAGENTS_LANGSMITH_PROJECT")
         user_langchain_project = _original_langsmith_project  # Use saved original!
 
         # Detect project
@@ -317,7 +261,13 @@ class Settings:
         Returns:
             Path to ~/.deepagents
         """
-        return Path.home() / ".deepagents"
+        # User requested override to specific directory via relative path
+        # config.py is in libs/deepagents-app/deepagents_core/config.py
+        # We want to reach libs/assemble_agents
+        # parent = deepagents_core
+        # parent.parent = deepagents-app
+        # parent.parent.parent = libs
+        return Path(__file__).resolve().parent.parent.parent / "assemble_agents"
 
     def get_user_agent_md_path(self, agent_name: str) -> Path:
         """Get user-level agent.md path for a specific agent.
@@ -330,7 +280,7 @@ class Settings:
         Returns:
             Path to ~/.deepagents/{agent_name}/agent.md
         """
-        return Path.home() / ".deepagents" / agent_name / "agent.md"
+        return self.user_deepagents_dir / agent_name / "agent.md"
 
     def get_project_agent_md_path(self) -> Path | None:
         """Get project-level agent.md path.
@@ -367,7 +317,7 @@ class Settings:
                 "Agent names can only contain letters, numbers, hyphens, underscores, and spaces."
             )
             raise ValueError(msg)
-        return Path.home() / ".deepagents" / agent_name
+        return self.user_deepagents_dir / agent_name
 
     def ensure_agent_dir(self, agent_name: str) -> Path:
         """Ensure the global agent directory exists and return its path.

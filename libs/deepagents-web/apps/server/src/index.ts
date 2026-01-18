@@ -1,3 +1,5 @@
+import path from 'path'
+
 import express from 'express'
 import cors from 'cors'
 import chat from './routes/chat'
@@ -20,7 +22,7 @@ app.use('/api/v1/tools', tools)
 app.use('/api/v1/kb', kb)
 app.use('/api/v1/skills', skills)
 app.use('/api/v1/feedback', feedback)
-const port = Number(process.env.PORT || 8005)
+const port = Number(process.env.SERVER_PORT || process.env.PORT || 8005)
 app.listen(port, () => {
   console.log(`server listening on http://localhost:${port}`)
 })

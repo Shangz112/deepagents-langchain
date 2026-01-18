@@ -26,8 +26,12 @@ warnings.filterwarnings("ignore", message=".*typing.NotRequired.*", category=Use
 # Filter out noisy polling logs
 class EndpointFilter(logging.Filter):
     def filter(self, record: logging.LogRecord) -> bool:
-        return record.getMessage().find("GET /sessions/") == -1 or \
-               (record.getMessage().find("/config") == -1 and record.getMessage().find("/context") == -1)
+        msg = record.getMessage()
+        # Always show stream logs
+        if "/stream" in msg:
+            return True
+        return msg.find("GET /sessions/") == -1 or \
+               (msg.find("/config") == -1 and msg.find("/context") == -1)
 
 # Add filter to uvicorn access logger
 logging.getLogger("uvicorn.access").addFilter(EndpointFilter())
@@ -97,33 +101,17 @@ app = FastAPI(lifespan=lifespan)
 sessions: Dict[str, Dict] = {}
 checkpointers: Dict[str, Any] = {}
 
-# Default config (empty API key for security)
+# Default config (load from env or use defaults)
 siliconflow_config = {
-    "api_key": "sk-zyhbakslfsnztzpbyrmopbzvzuajofmmsedpmfrgnfpqsrfn",
-    "base_url": "https://api.siliconflow.cn/v1",
-    "model": "deepseek-ai/DeepSeek-V3.2"
+    "api_key": os.getenv("SILICONFLOW_API_KEY", ""),
+    "base_url": os.getenv("SILICONFLOW_BASE_URL", "https://api.siliconflow.cn/v1"),
+    "model": os.getenv("SILICONFLOW_MODEL", "deepseek-ai/DeepSeek-V3.2")
 }
 
 # Config persistence
-DATA_DIR = Path(__file__).parent.parent / "deepagents_data"
-DATA_DIR.mkdir(exist_ok=True)
-CONFIG_FILE = DATA_DIR / "siliconflow.json"
+DATA_DIR = Path(__file__).parent.parent.parent / "assemble_agents"
+DATA_DIR.mkdir(exist_ok=True, parents=True)
 PROMPTS_FILE = DATA_DIR / "prompts.json"
-
-def load_config():
-    if CONFIG_FILE.exists():
-        try:
-            return json.loads(CONFIG_FILE.read_text(encoding='utf-8'))
-        except Exception as e:
-            print(f"Error loading config: {e}")
-    return siliconflow_config
-
-def save_config(cfg):
-    try:
-        CONFIG_FILE.write_text(json.dumps(cfg, indent=2, ensure_ascii=False), encoding='utf-8')
-    except Exception as e:
-        print(f"Error saving config: {e}")
-
 
 KB_FILE = DATA_DIR / "kb_sources.json"
 AGENTS_FILE = DATA_DIR / "subagents.json"
@@ -161,7 +149,6 @@ def load_prompts():
 def save_prompts(prompts):
     save_json_file(PROMPTS_FILE, prompts)
 
-siliconflow_config = load_config()
 
 def _new_id() -> str:
     return str(int(time.time() * 1000))
@@ -188,7 +175,11 @@ def delete_kb_source(sid: str):
     if target:
         # Remove from RAG
         rag = get_rag_service(siliconflow_config.get('api_key'))
-        # Use basename of path as source key, as that's what ingest uses
+        
+        # 1. Try deleting by ID (new standard)
+        rag.delete_file(sid)
+        
+        # 2. Try deleting by filename (legacy fallback)
         if target.get('path'):
             source_key = os.path.basename(target['path'])
             rag.delete_file(source_key)
@@ -220,7 +211,13 @@ def get_source_chunks(sid: str):
         raise HTTPException(status_code=404, detail="Source not found")
     
     rag = get_rag_service(siliconflow_config.get('api_key'))
-    # Use basename
+    
+    # 1. Try ID (new standard)
+    chunks = rag.get_chunks(sid)
+    if chunks:
+        return chunks
+        
+    # 2. Fallback to basename (legacy)
     if target.get('path'):
         source_key = os.path.basename(target['path'])
         return rag.get_chunks(source_key)
@@ -258,7 +255,11 @@ def preview_kb_source(sid: str):
     rag = get_rag_service(siliconflow_config.get('api_key'))
     
     chunks = []
-    if target.get('path'):
+    # 1. Try ID
+    chunks = rag.get_chunks(sid)
+    
+    # 2. Fallback
+    if not chunks and target.get('path'):
         source_key = os.path.basename(target['path'])
         chunks = rag.get_chunks(source_key)
     
@@ -303,9 +304,13 @@ async def upload_kb_file(file: UploadFile = File(...), template: str = Form("def
         with open(file_path, "wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
             
+        # Generate ID first to use as stable source key
+        new_id = _new_id()
+            
         # Ingest
         rag = get_rag_service(siliconflow_config.get('api_key'))
-        result = rag.ingest_file(str(file_path), file.filename, template=template)
+        # Pass ID as source_id
+        result = rag.ingest_file(str(file_path), file.filename, template=template, source_id=new_id)
         
         if result.get('error'):
              return JSONResponse(status_code=500, content=result)
@@ -313,7 +318,7 @@ async def upload_kb_file(file: UploadFile = File(...), template: str = Form("def
         # Add to sources list
         sources = load_json_file(KB_FILE)
         new_source = {
-            "id": _new_id(),
+            "id": new_id,
             "name": file.filename,
             "type": "file",
             "path": str(file_path),
@@ -435,7 +440,8 @@ async def update_config(req: Request):
         updated = True
     
     if updated:
-        save_config(siliconflow_config)
+        # Config is now managed by env vars, so we only update memory
+        print("Config updated in memory (not persisted to file)")
         
     return { 'ok': True }
 
@@ -467,9 +473,9 @@ def _init_agent(assistant_id: str, checkpointer, enable_tools: bool = True, cust
     model.profile = {"max_input_tokens": 62000}
 
     # Setup agent directory
-    # Force agent_dir to be local to the current working directory to avoid Windows absolute path issues
-    # in virtual_mode=True
-    agent_dir = Path.cwd() / "deepagents_data" / assistant_id
+    # User requested override to assemble_agents directory
+    # DATA_DIR is already set to d:/MASrepos/deepagents-langchain/libs/assemble_agents
+    agent_dir = DATA_DIR / "sessions" / assistant_id
     agent_dir.mkdir(parents=True, exist_ok=True)
     
     agent_md = agent_dir / "agent.md"
@@ -656,21 +662,42 @@ async def stream_session(sid: str):
 
     session['pending_input'] = None
     
+    t0 = time.time()
     cp = checkpointers.get(sid)
     if not cp:
         cp = InMemorySaver()
         checkpointers[sid] = cp
         
-    agent = _init_agent(
-        assistant_id=sid,
-        checkpointer=cp,
-        enable_tools=enable_tools,
-        custom_system_prompt=session['config'].get('system_prompt')
-    )
+    print(f"[TIMING] Checkpointer setup: {time.time() - t0:.4f}s")
+    
+    t1 = time.time()
+    # Check if we can reuse cached agent
+    agent = None
+    # Simple cache key based on enable_tools
+    cache_key = f"{enable_tools}_{session['config'].get('system_prompt')}"
+    
+    if session.get('agent_cache') and session.get('agent_cache_key') == cache_key:
+        print("[TIMING] Using cached agent")
+        agent = session['agent_cache']
+    else:
+        print("[TIMING] Initializing new agent")
+        agent = _init_agent(
+            assistant_id=sid,
+            checkpointer=cp,
+            enable_tools=enable_tools,
+            custom_system_prompt=session['config'].get('system_prompt')
+        )
+        session['agent_cache'] = agent
+        session['agent_cache_key'] = cache_key
+    
+    print(f"[TIMING] Agent init: {time.time() - t1:.4f}s")
     
     async def event_generator():
         try:
             config = {"configurable": {"thread_id": sid}}
+            
+            t2 = time.time()
+            print(f"[TIMING] Starting stream events")
             
             async for event in agent.astream_events(
                 {"messages": [HumanMessage(content=pending_input)]},
