@@ -165,9 +165,9 @@ export const sessionStore = reactive({
         this.sessions = []
     }
   },
-  async createSession() {
+  async createSession(message: string = 'New Session') {
       try {
-          const res = await axios.post('/api/v1/chat/sessions')
+          const res = await axios.post('/api/v1/chat/sessions', { message })
           await this.loadSessions()
           return res.data.id
       } catch (e) {
@@ -272,7 +272,9 @@ export const chatStore = reactive({
 
   async checkSessionStatus(sessionId: string) {
     try {
-        const res = await axios.get(`/api/v1/chat/sessions/${sessionId}/status`)
+        const res = await axios.get(`/api/v1/chat/sessions/${sessionId}/status`, {
+            headers: { 'X-Interaction-Type': 'passive' }
+        })
         const status = res.data
         
         if (status.status === 'generating') {

@@ -2,8 +2,12 @@ import fetch from 'node-fetch'
 import FormData from 'form-data'
 
 const PY_URL = process.env.PY_SERVICE_URL || 'http://127.0.0.1:8001'
-export async function createSession() {
-  const r = await fetch(`${PY_URL}/sessions`, { method: 'POST' })
+export async function createSession(payload: any = {}) {
+  const r = await fetch(`${PY_URL}/sessions`, { 
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(payload)
+  })
   return r.json()
 }
 export async function listSessions() {

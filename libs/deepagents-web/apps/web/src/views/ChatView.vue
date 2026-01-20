@@ -342,7 +342,7 @@ onMounted(() => {
   // if (currentEventSource) ...
 })
 
-async function ensureSession(retryCount = 0) {
+async function ensureSession(message: string = 'New Session', retryCount = 0) {
   if (sessionId.value) return
 
   // Check if store already has a session
@@ -357,7 +357,7 @@ async function ensureSession(retryCount = 0) {
 
   sessionError.value = false
   try {
-    const r = await axios.post('/api/v1/chat/sessions')
+    const r = await axios.post('/api/v1/chat/sessions', { message })
     sessionId.value = r.data.id
     sessionStore.setSessionId(r.data.id)
     sessionError.value = false
@@ -369,7 +369,7 @@ async function ensureSession(retryCount = 0) {
     if (retryCount < 3) {
       const delay = Math.pow(2, retryCount) * 1000
       console.log(`Retrying session init in ${delay}ms...`)
-      setTimeout(() => ensureSession(retryCount + 1), delay)
+      setTimeout(() => ensureSession(message, retryCount + 1), delay)
     }
   }
 }
@@ -380,7 +380,8 @@ function quickStart(text: string) {
 
 async function onSend(payload: { text: string; tools: boolean; template?: any; files: File[] }) {
   if (!sessionId.value) {
-      await ensureSession()
+      // Ensure session is created even if text is empty (e.g. file upload)
+      await ensureSession(payload.text || 'New Session')
       if (!sessionId.value) {
         chatStore.messages.push({
           id: String(Date.now()),

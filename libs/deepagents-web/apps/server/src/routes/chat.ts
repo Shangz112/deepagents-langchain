@@ -12,7 +12,7 @@ router.get('/prompts', async (req, res) => {
 })
 router.post('/sessions', async (req, res) => {
   try {
-    const s = await createSession()
+    const s = await createSession(req.body)
     res.json(s)
   } catch (e: any) {
     res.status(502).json({ error: 'python_service_unavailable', detail: String(e?.message || e) })

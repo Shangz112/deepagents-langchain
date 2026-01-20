@@ -210,7 +210,7 @@ async def background_generator(sid, agent, history_msgs, config, stream_state, s
 siliconflow_config = {
     "api_key": os.getenv("SILICONFLOW_API_KEY", ""),
     "base_url": os.getenv("SILICONFLOW_BASE_URL", "https://api.siliconflow.cn/v1"),
-    "model": os.getenv("SILICONFLOW_MODEL", "deepseek-ai/DeepSeek-V3.2")
+    "model": os.getenv("SILICONFLOW_MODEL", "Qwen/Qwen3-30B-A3B-Thinking-2507")
 }
 
 # Config persistence
@@ -757,6 +757,10 @@ async def create_session(req: Request):
     except:
         body = {}
     
+    # Requirement: Backend must verify valid user input content for session creation
+    if not body.get('message'):
+        raise HTTPException(status_code=400, detail="Initial message required to create session")
+
     sid = db_module.create_session_db(body)
     
     # Initialize runtime state
