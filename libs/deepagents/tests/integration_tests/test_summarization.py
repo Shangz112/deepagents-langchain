@@ -1,4 +1,5 @@
 import re
+import uuid
 from pathlib import Path
 from textwrap import dedent
 from typing import Any
@@ -73,7 +74,7 @@ def _setup_summarization_test(tmp_path: Path, model_name: str) -> tuple[Any, Fil
         checkpointer=checkpointer,
     )
 
-    config = {"configurable": {"thread_id": "1"}}
+    config = {"configurable": {"thread_id": uuid.uuid4().hex[:8]}}
 
     return agent, backend, root, config
 
@@ -90,12 +91,13 @@ def test_summarize_continues_task(tmp_path: Path, model_name: str) -> None:
 
     input_message = {
         "role": "user",
-        "content": "Can you read the entirety of base.py and summarize it?",
+        "content": "Can you read the entirety of base.py, 500 lines at a time, and summarize it?",
     }
     result = agent.invoke({"messages": [input_message]}, config)
 
     # Check we summarized
-    assert result["messages"][0].additional_kwargs["lc_source"] == "summarization"
+    state = agent.get_state(config)
+    assert state.values["_summarization_event"]
 
     # Verify the agent made substantial progress reading the file after summarization.
     # We check the highest line number seen across all tool messages to confirm
@@ -113,7 +115,7 @@ def test_summarize_continues_task(tmp_path: Path, model_name: str) -> None:
             if line_numbers:
                 max_line_seen = max(max_line_seen, *[int(n) for n in line_numbers])
 
-    assert max_line_seen >= 4609 or reached_eof, (  # noqa: PLR2004
+    assert max_line_seen >= 4609 or reached_eof, (
         f"Expected agent to make substantial progress reading file. Max line seen: {max_line_seen}, reached EOF: {reached_eof}"
     )
 
@@ -134,19 +136,21 @@ def test_summarization_offloads_to_filesystem(tmp_path: Path, model_name: str) -
 
     input_message = {
         "role": "user",
-        "content": "Can you read the entirety of base.py and summarize it?",
+        "content": "Can you read the entirety of base.py, 500 lines at a time, and summarize it?",
     }
-    result = agent.invoke({"messages": [input_message]}, config)
+    _ = agent.invoke({"messages": [input_message]}, config)
 
     # Check we summarized
-    assert result["messages"][0].additional_kwargs["lc_source"] == "summarization"
+    state = agent.get_state(config)
+    assert state.values["_summarization_event"]
 
     # Verify conversation history was offloaded to filesystem
     conversation_history_root = root / "conversation_history"
     assert conversation_history_root.exists(), f"Conversation history root directory not found at {conversation_history_root}"
 
-    # Verify the markdown file exists for thread_id "1"
-    history_file = conversation_history_root / "1.md"
+    # Verify the markdown file exists for thread_id
+    thread_id = config["configurable"]["thread_id"]
+    history_file = conversation_history_root / f"{thread_id}.md"
     assert history_file.exists(), f"Expected markdown file at {history_file}"
 
     # Read and verify markdown content
@@ -159,9 +163,9 @@ def test_summarization_offloads_to_filesystem(tmp_path: Path, model_name: str) -
     assert "Human:" in content or "AI:" in content, "Missing message content in markdown file"
 
     # Verify the summary message references the conversation_history path
-    summary_message = result["messages"][0]
+    summary_message = state.values["_summarization_event"]["summary_message"]
     assert "conversation_history" in summary_message.content
-    assert "1.md" in summary_message.content
+    assert f"{thread_id}.md" in summary_message.content
 
     # --- Needle in the haystack follow-up ---
     # Ask about a specific detail from the beginning of the file that was read

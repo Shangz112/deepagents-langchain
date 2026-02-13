@@ -222,13 +222,13 @@ class CompositeBackend(BackendProtocol):
         path: str | None = None,
         glob: str | None = None,
     ) -> list[GrepMatch] | str:
-        """Search files for regex pattern.
+        """Search files for literal text pattern.
 
         Routes to backends based on path: specific route searches one backend,
         "/" or None searches all backends, otherwise searches default backend.
 
         Args:
-            pattern: Regex pattern to search for.
+            pattern: Literal text to search for (NOT regex).
             path: Directory to search. None searches all backends.
             glob: Glob pattern to filter files (e.g., "*.py", "**/*.txt").
                 Filters by filename, not content.
@@ -248,7 +248,7 @@ class CompositeBackend(BackendProtocol):
         for route_prefix, backend in self.sorted_routes:
             if path is not None and path.startswith(route_prefix.rstrip("/")):
                 search_path = path[len(route_prefix) - 1 :]
-                raw = backend.grep_raw(pattern, search_path if search_path else "/", glob)
+                raw = backend.grep_raw(pattern, search_path or "/", glob)
                 if isinstance(raw, str):
                     return raw
                 return [{**m, "path": f"{route_prefix[:-1]}{m['path']}"} for m in raw]
@@ -288,7 +288,7 @@ class CompositeBackend(BackendProtocol):
         for route_prefix, backend in self.sorted_routes:
             if path is not None and path.startswith(route_prefix.rstrip("/")):
                 search_path = path[len(route_prefix) - 1 :]
-                raw = await backend.agrep_raw(pattern, search_path if search_path else "/", glob)
+                raw = await backend.agrep_raw(pattern, search_path or "/", glob)
                 if isinstance(raw, str):
                     return raw
                 return [{**m, "path": f"{route_prefix[:-1]}{m['path']}"} for m in raw]
@@ -321,7 +321,7 @@ class CompositeBackend(BackendProtocol):
         for route_prefix, backend in self.sorted_routes:
             if path.startswith(route_prefix.rstrip("/")):
                 search_path = path[len(route_prefix) - 1 :]
-                infos = backend.glob_info(pattern, search_path if search_path else "/")
+                infos = backend.glob_info(pattern, search_path or "/")
                 return [{**fi, "path": f"{route_prefix[:-1]}{fi['path']}"} for fi in infos]
 
         # Path doesn't match any specific route - search default backend AND all routed backends
@@ -343,7 +343,7 @@ class CompositeBackend(BackendProtocol):
         for route_prefix, backend in self.sorted_routes:
             if path.startswith(route_prefix.rstrip("/")):
                 search_path = path[len(route_prefix) - 1 :]
-                infos = await backend.aglob_info(pattern, search_path if search_path else "/")
+                infos = await backend.aglob_info(pattern, search_path or "/")
                 return [{**fi, "path": f"{route_prefix[:-1]}{fi['path']}"} for fi in infos]
 
         # Path doesn't match any specific route - search default backend AND all routed backends
