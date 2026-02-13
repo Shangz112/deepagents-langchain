@@ -90,13 +90,48 @@ except ImportError:
             def put(self, config, checkpoint, metadata): pass
             def put_writes(self, config, writes, task_id): pass
 
+try:
+    from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
+    import aiosqlite
+    
+    # Monkeypatch for aiosqlite < 0.22 compatibility with langgraph-checkpoint-sqlite
+    if not hasattr(aiosqlite.Connection, 'is_alive'):
+        def is_alive(self):
+            return self._running and self._connection is not None
+        aiosqlite.Connection.is_alive = is_alive
+        
+    HAS_SQLITE_SAVER = True
+except ImportError:
+    HAS_SQLITE_SAVER = False
+    print("Warning: langgraph-checkpoint-sqlite or aiosqlite not found. Persistence will be limited.")
+
+# Global checkpointer
+global_checkpointer = None
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup logic
     db_module.init_db()
-    yield
-    # Shutdown logic if needed
+    
+    # Initialize Global Checkpointer
+    global global_checkpointer
+    db_path = str(db_module.DB_PATH)
+    
+    if HAS_SQLITE_SAVER:
+        try:
+            # Use AsyncSqliteSaver with context manager
+            async with AsyncSqliteSaver.from_conn_string(db_path) as saver:
+                global_checkpointer = saver
+                print(f"Initialized AsyncSqliteSaver at {db_path}")
+                yield
+        except Exception as e:
+            print(f"Failed to initialize AsyncSqliteSaver: {e}")
+            global_checkpointer = InMemorySaver()
+            yield
+    else:
+        global_checkpointer = InMemorySaver()
+        yield
+
     # Explicitly handle potential cancellation during shutdown to avoid noisy logs
     try:
         # Give a moment for pending tasks to complete if any
@@ -106,7 +141,6 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(lifespan=lifespan)
 sessions: Dict[str, Dict] = {}
-checkpointers: Dict[str, Any] = {}
 
 class StreamState:
     def __init__(self):
@@ -143,8 +177,42 @@ async def background_generator(sid, agent, history_msgs, config, stream_state, s
         sessions_dict[sid]['abort_signal'] = False
         
     try:
+        # Deduplicate messages against checkpoint to avoid loops/duplication
+        input_messages = history_msgs
+        try:
+            snapshot = await agent.aget_state(config)
+            if snapshot and snapshot.values and 'messages' in snapshot.values:
+                existing_msgs = snapshot.values['messages']
+                if len(existing_msgs) > 0:
+                    # Checkpoint exists. 
+                    # We assume the checkpoint contains the conversation prefix.
+                    # We need to find which messages in history_msgs are NEW.
+                    
+                    # Heuristic: If we have N messages in DB, and M in Checkpoint.
+                    # If M > 0, we assume the first M (or M-1 if system prompt involved) are sync'd.
+                    # But the safest bet for this specific app flow (User sends 1 message -> Generate):
+                    # The DB has [Old..., NewUserMsg]. Checkpoint has [Old...].
+                    # So we just pass the last message.
+                    
+                    # However, to be safer against restarts where DB > Checkpoint:
+                    # We pass the full history? No, that causes duplication if Checkpoint is valid.
+                    
+                    # Let's count how many User/Assistant messages are in Checkpoint.
+                    # This is tricky because of ToolMessages.
+                    
+                    # Simple Strategy:
+                    # If Checkpoint has messages, we ONLY pass the last message from history_msgs,
+                    # assuming it is the new trigger.
+                    if len(history_msgs) > 0:
+                        input_messages = [history_msgs[-1]]
+                        print(f"Session {sid}: Using incremental update (1 message) against existing checkpoint.")
+            else:
+                print(f"Session {sid}: No checkpoint found. Replaying full history ({len(history_msgs)} messages).")
+        except Exception as e:
+            print(f"Error checking snapshot: {e}. Defaulting to full history.")
+
         async for event in agent.astream_events(
-            {"messages": history_msgs},
+            {"messages": input_messages},
             config=config,
             version="v1"
         ):
@@ -178,7 +246,7 @@ async def background_generator(sid, agent, history_msgs, config, stream_state, s
         # Save state logic
         try:
              from langchain_core.messages import HumanMessage, ToolMessage
-             snapshot = agent.get_state(config)
+             snapshot = await agent.aget_state(config)
              if snapshot and snapshot.values and 'messages' in snapshot.values:
                  new_msgs = snapshot.values['messages'][len(history_msgs):]
                  for m in new_msgs:
@@ -769,7 +837,7 @@ async def create_session(req: Request):
         'agent_cache': None,
         'config': body
     }
-    checkpointers[sid] = InMemorySaver()
+    # Checkpointer is now global/persistent
     return {'id': sid}
 
 @app.put('/sessions/{sid}')
@@ -805,8 +873,7 @@ async def delete_sessions_batch(req: Request):
         for sid in ids:
             if sid in sessions:
                 del sessions[sid]
-            if sid in checkpointers:
-                del checkpointers[sid]
+            # checkpointers cleanup removed as it's global now
                 
             agent_dir = DATA_DIR / "sessions" / sid
             if agent_dir.exists():
@@ -930,8 +997,7 @@ async def stream_session(sid: str):
         session['pending_input'] = None # Consume input
         
         # Setup checkpointer
-        cp = InMemorySaver()
-        checkpointers[sid] = cp
+        cp = global_checkpointer
         
         # Load history
         db_messages = session_db.get('messages', [])
@@ -957,7 +1023,7 @@ async def stream_session(sid: str):
             custom_system_prompt=session['config'].get('system_prompt')
         )
         
-        config = {"configurable": {"thread_id": sid}, "recursion_limit": 100}
+        config = {"configurable": {"thread_id": sid}, "recursion_limit": 150}
         
         # Start Background Task
         stream_state.task = asyncio.create_task(

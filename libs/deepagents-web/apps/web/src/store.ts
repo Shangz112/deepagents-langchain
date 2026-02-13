@@ -391,6 +391,8 @@ export const chatStore = reactive({
             if (d.type === 'done') {
               assistantMsg.streaming = false
               this.closeStream()
+              // Refresh sessions list to pick up any auto-renaming
+              sessionStore.loadSessions()
             }
           } catch (err) {
             console.error('SSE Parse Error', err)

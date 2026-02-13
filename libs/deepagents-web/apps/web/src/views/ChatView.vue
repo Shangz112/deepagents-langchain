@@ -275,6 +275,12 @@ async function loadSessionHistory(sid: string) {
 }
 
 onMounted(async () => {
+    // Restore session if available in store
+    if (sessionStore.sessionId && !sessionId.value) {
+        sessionId.value = sessionStore.sessionId
+        await loadSessionHistory(sessionId.value)
+    }
+
     try {
         const r = await axios.get('/api/v1/chat/prompts/quick-starters')
         quickStarters.value = r.data
