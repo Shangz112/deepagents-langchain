@@ -34,7 +34,7 @@ from deepagents.middleware.subagents import (
 )
 from deepagents.middleware.summarization import SummarizationMiddleware, _compute_summarization_defaults
 
-BASE_AGENT_PROMPT = (Path(__file__).parent / "base_prompt.md").read_text()
+BASE_AGENT_PROMPT = (Path(__file__).parent / "base_prompt.md").read_text(encoding="utf-8")
 
 
 def get_default_model() -> ChatAnthropic:

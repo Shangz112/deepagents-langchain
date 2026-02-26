@@ -452,6 +452,9 @@ class Settings:
     # Project information
     project_root: Path | None = None
 
+    # Base directory for deepagents data (defaults to ~/.deepagents)
+    deepagents_home: Path = Path.home() / ".deepagents"
+
     # Shell command allow-list for auto-approval
     shell_allow_list: list[str] | None = None
 
@@ -483,6 +486,10 @@ class Settings:
         # Detect project
         project_root = _find_project_root(start_path)
 
+        # Detect deepagents home
+        deepagents_home_str = os.environ.get("DEEPAGENTS_HOME")
+        deepagents_home = Path(deepagents_home_str) if deepagents_home_str else Path.home() / ".deepagents"
+
         # Parse shell command allow-list from environment
         # Format: comma-separated list of commands (e.g., "ls,cat,grep,pwd")
         # Special value "recommended" uses RECOMMENDED_SAFE_SHELL_COMMANDS
@@ -498,6 +505,7 @@ class Settings:
             deepagents_langchain_project=deepagents_langchain_project,
             user_langchain_project=user_langchain_project,
             project_root=project_root,
+            deepagents_home=deepagents_home,
             shell_allow_list=shell_allow_list,
         )
 
@@ -536,12 +544,11 @@ class Settings:
         """Get the base user-level .deepagents directory.
 
         Returns:
-            Path to ~/.deepagents
+            Path to ~/.deepagents (or configured override)
         """
-        return Path.home() / ".deepagents"
+        return self.deepagents_home
 
-    @staticmethod
-    def get_user_agent_md_path(agent_name: str) -> Path:
+    def get_user_agent_md_path(self, agent_name: str) -> Path:
         """Get user-level AGENTS.md path for a specific agent.
 
         Returns path regardless of whether the file exists.
@@ -552,7 +559,7 @@ class Settings:
         Returns:
             Path to ~/.deepagents/{agent_name}/AGENTS.md
         """
-        return Path.home() / ".deepagents" / agent_name / "AGENTS.md"
+        return self.deepagents_home / agent_name / "AGENTS.md"
 
     def get_project_agent_md_path(self) -> Path | None:
         """Get project-level AGENTS.md path.
@@ -596,7 +603,7 @@ class Settings:
                 "contain letters, numbers, hyphens, underscores, and spaces."
             )
             raise ValueError(msg)
-        return Path.home() / ".deepagents" / agent_name
+        return self.deepagents_home / agent_name
 
     def ensure_agent_dir(self, agent_name: str) -> Path:
         """Ensure the global agent directory exists and return its path.

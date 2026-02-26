@@ -13,9 +13,7 @@ from langgraph.checkpoint.serde.jsonplus import JsonPlusSerializer
 from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
 from rich.table import Table
 
-from deepagents_cli.config import COLORS, console
-
-logger = logging.getLogger(__name__)
+from deepagents_cli.config import COLORS, console, settings
 
 
 class ThreadInfo(TypedDict):
@@ -87,7 +85,7 @@ def get_db_path() -> Path:
     Returns:
         Path to the SQLite database file.
     """
-    db_dir = Path.home() / ".deepagents"
+    db_dir = settings.deepagents_home
     db_dir.mkdir(parents=True, exist_ok=True)
     return db_dir / "sessions.db"
 

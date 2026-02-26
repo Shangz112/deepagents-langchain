@@ -7,7 +7,7 @@ import asyncio
 import threading
 import hashlib
 import shutil
-from typing import Dict, Any
+from typing import Dict, Any, AsyncIterator
 from pathlib import Path
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, UploadFile, File, Form
@@ -22,9 +22,30 @@ import logging
 import warnings
 from dotenv import load_dotenv
 
-# Load env from specific path
+from pathlib import Path
+
+DATA_DIR = Path(__file__).parent.parent.parent / "assemble_agents"
+
+
+
+
+
+
+# --- CLI Integration Imports ---
+# Import config first to set up environment (LANGSMITH_PROJECT, etc.)
+from deepagents_cli.config import settings, config, get_default_coding_instructions
+
+# Configure CLI settings to use local sessions directory
+settings.deepagents_home = DATA_DIR / "sessions"
+from deepagents_cli.sessions import get_checkpointer
+from deepagents_cli.agent import create_cli_agent, get_system_prompt
+from deepagents_cli.tools import http_request, fetch_url, web_search
+from langchain_openai import ChatOpenAI
+from langchain_core.messages import ToolMessage # Ensure this is available
+
+# Load env from specific path (Web service config)
 env_path = Path(r"d:/MASrepos/deepagents-langchain/libs/deepagents-web/.env")
-load_dotenv(dotenv_path=env_path)
+load_dotenv(dotenv_path=env_path, override=True) # Override to ensure web settings take precedence
 
 # Filter out noisy Pydantic warnings about NotRequired
 warnings.filterwarnings("ignore", message=".*typing.NotRequired.*", category=UserWarning)
@@ -42,99 +63,32 @@ class EndpointFilter(logging.Filter):
 # Add filter to uvicorn access logger
 logging.getLogger("uvicorn.access").addFilter(EndpointFilter())
 
-DEEPAGENTS_PATH = r"d:/MASrepos/deepagents-langchain/libs/deepagents-app/"
-DEEPAGENTS_CLI_PATH = r"d:/MASrepos/deepagents-langchain/libs/deepagents-cli/"
-for p in (DEEPAGENTS_PATH, DEEPAGENTS_CLI_PATH):
-    if p not in sys.path:
-        sys.path.insert(0, p)
-
-try:
-    from langchain_openai import ChatOpenAI
-    from deepagents import create_deep_agent
-    from deepagents.backends import CompositeBackend
-    from deepagents.backends.filesystem import FilesystemBackend
-    from deepagents_core.agent_memory import AgentMemoryMiddleware
-    from deepagents_core.skills import SkillsMiddleware
-    from deepagents_core.shell import ShellMiddleware
-    from deepagents_cli.config import settings, config
-    from deepagents_core.agent import get_system_prompt, get_default_coding_instructions
-    
-    # Monkeypatch to allow Windows paths
-    import deepagents.middleware.filesystem
-    import re
-    
-    _original_validate = deepagents.middleware.filesystem._validate_path
-    
-    def _patched_validate(path, *args, **kwargs):
-        # Allow Windows absolute paths
-        if re.match(r"^[a-zA-Z]:", path):
-            return path.replace("\\", "/")
-        return _original_validate(path, *args, **kwargs)
-        
-    deepagents.middleware.filesystem._validate_path = _patched_validate
-
-except ImportError as e:
-    print(f"Warning: Failed to import deepagents modules: {e}")
-
-try:
-    from langgraph.checkpoint.memory import InMemorySaver
-except ImportError:
-    try:
-        from langgraph.checkpoint.memory import MemorySaver as InMemorySaver
-    except ImportError:
-        # Fallback or simple mock if langgraph is not installed
-        print("Warning: langgraph not found, InMemorySaver will fail if used.")
-        class InMemorySaver:
-            def __init__(self): pass
-            def get(self, config): return None
-            def put(self, config, checkpoint, metadata): pass
-            def put_writes(self, config, writes, task_id): pass
-
-try:
-    from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
-    import aiosqlite
-    
-    # Monkeypatch for aiosqlite < 0.22 compatibility with langgraph-checkpoint-sqlite
-    if not hasattr(aiosqlite.Connection, 'is_alive'):
-        def is_alive(self):
-            return self._running and self._connection is not None
-        aiosqlite.Connection.is_alive = is_alive
-        
-    HAS_SQLITE_SAVER = True
-except ImportError:
-    HAS_SQLITE_SAVER = False
-    print("Warning: langgraph-checkpoint-sqlite or aiosqlite not found. Persistence will be limited.")
-
 # Global checkpointer
 global_checkpointer = None
+
+# Monkeypatching for path consistency with Web App structure
+from deepagents_cli import sessions as cli_sessions
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup logic
-    db_module.init_db()
-    
-    # Initialize Global Checkpointer
-    global global_checkpointer
-    db_path = str(db_module.DB_PATH)
-    
-    if HAS_SQLITE_SAVER:
-        try:
-            # Use AsyncSqliteSaver with context manager
-            async with AsyncSqliteSaver.from_conn_string(db_path) as saver:
-                global_checkpointer = saver
-                print(f"Initialized AsyncSqliteSaver at {db_path}")
-                yield
-        except Exception as e:
-            print(f"Failed to initialize AsyncSqliteSaver: {e}")
-            global_checkpointer = InMemorySaver()
+    await db_module.init_db()
+
+    # Initialize Global Checkpointer using CLI's standardized logic
+    try:
+        async with get_checkpointer() as checkpointer:
+            global global_checkpointer
+            global_checkpointer = checkpointer
+            print(f"Initialized global checkpointer backed by: {cli_sessions.get_db_path()}")
             yield
-    else:
-        global_checkpointer = InMemorySaver()
+    except Exception as e:
+        print(f"Failed to initialize global checkpointer: {e}")
+        # Use a simple dummy checkpointer if initialization fails to allow app startup
+        global_checkpointer = None
         yield
 
     # Explicitly handle potential cancellation during shutdown to avoid noisy logs
     try:
-        # Give a moment for pending tasks to complete if any
         await asyncio.sleep(0.1)
     except asyncio.CancelledError:
         pass
@@ -154,7 +108,7 @@ class StreamState:
         self.history.append(event_str)
         for q in self.listeners:
             await q.put(event_str)
-            
+
     def add_listener(self):
         q = asyncio.Queue()
         # Replay history
@@ -169,13 +123,13 @@ class StreamState:
 
 async def background_generator(sid, agent, history_msgs, config, stream_state, sessions_dict):
     stream_state.status = "generating"
-    
+
     # Update global session status
     if sid in sessions_dict:
         sessions_dict[sid]['status'] = 'generating'
         sessions_dict[sid]['last_active'] = time.time()
         sessions_dict[sid]['abort_signal'] = False
-        
+
     try:
         # Deduplicate messages against checkpoint to avoid loops/duplication
         input_messages = history_msgs
@@ -184,22 +138,22 @@ async def background_generator(sid, agent, history_msgs, config, stream_state, s
             if snapshot and snapshot.values and 'messages' in snapshot.values:
                 existing_msgs = snapshot.values['messages']
                 if len(existing_msgs) > 0:
-                    # Checkpoint exists. 
+                    # Checkpoint exists.
                     # We assume the checkpoint contains the conversation prefix.
                     # We need to find which messages in history_msgs are NEW.
-                    
+
                     # Heuristic: If we have N messages in DB, and M in Checkpoint.
                     # If M > 0, we assume the first M (or M-1 if system prompt involved) are sync'd.
                     # But the safest bet for this specific app flow (User sends 1 message -> Generate):
                     # The DB has [Old..., NewUserMsg]. Checkpoint has [Old...].
                     # So we just pass the last message.
-                    
+
                     # However, to be safer against restarts where DB > Checkpoint:
                     # We pass the full history? No, that causes duplication if Checkpoint is valid.
-                    
+
                     # Let's count how many User/Assistant messages are in Checkpoint.
                     # This is tricky because of ToolMessages.
-                    
+
                     # Simple Strategy:
                     # If Checkpoint has messages, we ONLY pass the last message from history_msgs,
                     # assuming it is the new trigger.
@@ -220,7 +174,7 @@ async def background_generator(sid, agent, history_msgs, config, stream_state, s
             if sid in sessions_dict and sessions_dict[sid].get('abort_signal'):
                 await stream_state.broadcast(f"data: {json.dumps({'type': 'error', 'content': 'Aborted by user'})}\n\n")
                 break
-                
+
             kind = event["event"]
             if kind == "on_chat_model_stream":
                 content = event["data"]["chunk"].content
@@ -228,16 +182,16 @@ async def background_generator(sid, agent, history_msgs, config, stream_state, s
                     await stream_state.broadcast(f"data: {json.dumps({'type': 'chunk', 'content': content})}\n\n")
             elif kind == "on_tool_start":
                 await stream_state.broadcast(f"data: {json.dumps({
-                    'type': 'tool', 
-                    'id': event['run_id'], 
+                    'type': 'tool',
+                    'id': event['run_id'],
                     'name': event['name'],
                     'status': 'running',
                     'input': str(event['data'].get('input'))
                 })}\n\n")
             elif kind == "on_tool_end":
                 await stream_state.broadcast(f"data: {json.dumps({
-                    'type': 'tool', 
-                    'id': event['run_id'], 
+                    'type': 'tool',
+                    'id': event['run_id'],
                     'name': event['name'],
                     'status': 'done',
                     'output': str(event['data'].get('output'))
@@ -252,21 +206,21 @@ async def background_generator(sid, agent, history_msgs, config, stream_state, s
                  for m in new_msgs:
                      role = 'user' if isinstance(m, HumanMessage) else 'assistant'
                      if isinstance(m, ToolMessage): role = 'tool'
-                     
+
                      content = m.content
                      tool_calls = m.tool_calls if hasattr(m, 'tool_calls') else None
                      tool_call_id = m.tool_call_id if hasattr(m, 'tool_call_id') else None
-                     
-                     db_module.add_message_db(sid, role, content, tool_calls=tool_calls, tool_call_id=tool_call_id)
+
+                     await db_module.add_message_db(sid, role, content, tool_calls=tool_calls, tool_call_id=tool_call_id)
         except Exception as e:
              print(f"Error saving state: {e}")
 
         await stream_state.broadcast(f"data: {json.dumps({'type': 'done'})}\n\n")
-        
+
     except Exception as e:
         print(f"Generation error: {e}")
         await stream_state.broadcast(f"data: {json.dumps({'type': 'error', 'content': str(e)})}\n\n")
-        
+
     finally:
         stream_state.status = "done"
         stream_state.done_event.set()
@@ -348,15 +302,15 @@ def delete_kb_source(sid: str):
     if target:
         # Remove from RAG
         rag = get_rag_service(siliconflow_config.get('api_key'))
-        
+
         # 1. Try deleting by ID (new standard)
         rag.delete_file(sid)
-        
+
         # 2. Try deleting by filename (legacy fallback)
         if target.get('path'):
             source_key = os.path.basename(target['path'])
             rag.delete_file(source_key)
-        
+
         # Remove from JSON
         sources = [s for s in sources if str(s.get('id')) != sid]
         save_json_file(KB_FILE, sources)
@@ -368,7 +322,7 @@ async def rename_kb_source(sid: str, req: Request):
     new_name = body.get('name')
     if not new_name:
         return {'error': 'Name is required'}
-    
+
     sources = load_json_file(KB_FILE)
     target = next((s for s in sources if str(s.get('id')) == sid), None)
     if target:
@@ -382,14 +336,14 @@ def get_source_chunks(sid: str):
     target = next((s for s in sources if str(s.get('id')) == sid), None)
     if not target:
         raise HTTPException(status_code=404, detail="Source not found")
-    
+
     rag = get_rag_service(siliconflow_config.get('api_key'))
-    
+
     # 1. Try ID (new standard)
     chunks = rag.get_chunks(sid)
     if chunks:
         return chunks
-        
+
     # 2. Fallback to basename (legacy)
     if target.get('path'):
         source_key = os.path.basename(target['path'])
@@ -411,11 +365,11 @@ def get_source_file(sid: str):
     target = next((s for s in sources if str(s.get('id')) == sid), None)
     if not target or not target.get('path'):
         raise HTTPException(status_code=404, detail="Source file not found")
-    
+
     file_path = target['path']
     if not os.path.exists(file_path):
         raise HTTPException(status_code=404, detail="File on disk not found")
-        
+
     return FileResponse(file_path)
 
 @app.get('/kb/sources/{sid}/preview')
@@ -424,18 +378,18 @@ def preview_kb_source(sid: str):
     target = next((s for s in sources if str(s.get('id')) == sid), None)
     if not target:
         return JSONResponse(status_code=404, content={"error": "Source not found"})
-    
+
     rag = get_rag_service(siliconflow_config.get('api_key'))
-    
+
     chunks = []
     # 1. Try ID
     chunks = rag.get_chunks(sid)
-    
+
     # 2. Fallback
     if not chunks and target.get('path'):
         source_key = os.path.basename(target['path'])
         chunks = rag.get_chunks(source_key)
-    
+
     # Also try to read full content if it's a file
     full_content = ""
     try:
@@ -473,18 +427,18 @@ async def upload_kb_file(file: UploadFile = File(...), template: str = Form("def
         temp_dir = DATA_DIR / "uploads"
         temp_dir.mkdir(exist_ok=True)
         file_path = temp_dir / file.filename
-        
+
         with open(file_path, "wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
-            
+
         # Generate ID first to use as stable source key
         new_id = _new_id()
-            
+
         # Ingest
         rag = get_rag_service(siliconflow_config.get('api_key'))
         # Pass ID as source_id
         result = rag.ingest_file(str(file_path), file.filename, template=template, source_id=new_id)
-        
+
         if result.get('error'):
              return JSONResponse(status_code=500, content=result)
 
@@ -500,7 +454,7 @@ async def upload_kb_file(file: UploadFile = File(...), template: str = Form("def
         }
         sources.append(new_source)
         save_json_file(KB_FILE, sources)
-        
+
         return new_source
     except Exception as e:
         import traceback
@@ -526,12 +480,12 @@ async def save_feedback(req: Request):
     body = await req.json()
     # body: { messageId, query, response, rating: 'good'|'bad', timestamp }
     feedbacks = load_json_file(FEEDBACK_FILE)
-    
+
     if not body.get('id'):
         body['id'] = _new_id()
     if not body.get('timestamp'):
         body['timestamp'] = int(time.time() * 1000)
-        
+
     # Convert to RLHF/SFT format
     # Structure optimized for Agent Fine-tuning (Alpaca-style with feedback)
     entry = {
@@ -543,7 +497,7 @@ async def save_feedback(req: Request):
         "score": 1.0 if body.get('rating') == 'good' else 0.0,
         "timestamp": body.get('timestamp')
     }
-        
+
     feedbacks.append(entry)
     save_json_file(FEEDBACK_FILE, feedbacks)
     return {'ok': True}
@@ -611,11 +565,11 @@ async def update_config(req: Request):
     if 'model' in body:
         siliconflow_config['model'] = body['model']
         updated = True
-    
+
     if updated:
         # Config is now managed by env vars, so we only update memory
         print("Config updated in memory (not persisted to file)")
-        
+
     return { 'ok': True }
 
 def _get_config_hash(config_data):
@@ -633,7 +587,7 @@ def _path_validator(path: Path) -> bool:
     try:
         resolved = path.resolve()
         cwd = Path.cwd().resolve()
-        
+
         # Determine Project Root
         # Walk up from cwd until we find .git or 'libs' (heuristic for this repo structure)
         project_root = cwd
@@ -646,7 +600,7 @@ def _path_validator(path: Path) -> bool:
                 if (temp / ".git").exists():
                     break
             temp = temp.parent
-            
+
         # Allow paths within Project Root
         if sys.platform == "win32":
             r_str = str(resolved).lower()
@@ -656,12 +610,26 @@ def _path_validator(path: Path) -> bool:
         else:
             if resolved.is_relative_to(project_root):
                 return True
-                
+
         print(f"Path validation failed for: {resolved} (Project Root: {project_root})")
         return False
     except Exception as e:
         print(f"Path validation error: {e}")
         return False
+
+# Fallback definition for get_default_coding_instructions
+if 'get_default_coding_instructions' not in globals():
+    def get_default_coding_instructions() -> str:
+        # Try to find the default prompt file
+        try:
+            # Assuming DEEPAGENTS_PATH is d:/MASrepos/deepagents-langchain/libs/deepagents-app/
+            # and file is deepagents_core/default_agent_prompt.md
+            p = Path(DEEPAGENTS_PATH) / "deepagents_core" / "default_agent_prompt.md"
+            if p.exists():
+                return p.read_text(encoding='utf-8')
+        except Exception as e:
+            print(f"Error loading default prompt: {e}")
+        return "You are a helpful AI assistant."
 
 def _init_agent(assistant_id: str, checkpointer, enable_tools: bool = True, custom_system_prompt: str = None):
     if not siliconflow_config['api_key']:
@@ -677,15 +645,12 @@ def _init_agent(assistant_id: str, checkpointer, enable_tools: bool = True, cust
         streaming=True
     )
     # Enable summarization by setting profile with token limit
-    # DeepSeek V3 typically supports 64k, but we set a lower trigger to keep things fast
     model.profile = {"max_input_tokens": 62000}
 
-    # Setup agent directory
-    # User requested override to assemble_agents directory
-    # DATA_DIR is already set to d:/MASrepos/deepagents-langchain/libs/assemble_agents
+    # Setup agent directory override for Web App
     agent_dir = DATA_DIR / "sessions" / assistant_id
     agent_dir.mkdir(parents=True, exist_ok=True)
-    
+
     agent_md = agent_dir / "agent.md"
     if not agent_md.exists():
         source_content = get_default_coding_instructions()
@@ -694,129 +659,83 @@ def _init_agent(assistant_id: str, checkpointer, enable_tools: bool = True, cust
     # Force skills_dir to be local
     skills_dir = agent_dir / "skills"
     skills_dir.mkdir(parents=True, exist_ok=True)
-    
-    project_skills_dir = settings.get_project_skills_dir()
 
-    composite_backend = CompositeBackend(
-        default=FilesystemBackend(virtual_mode=False, path_validator=_path_validator),
-        routes={},
-    )
-
-    # We need to hack the AgentMemoryMiddleware to use our local agent_dir
-    # Since AgentMemoryMiddleware uses settings.ensure_agent_dir which uses ~/.deepagents
-    # We will subclass or just monkeypatch if possible, but cleaner to instantiate with custom paths if supported.
-    # Checking AgentMemoryMiddleware source... it takes settings and assistant_id.
-    # It uses settings.ensure_agent_dir(assistant_id) internally.
-    # To avoid changing library code, we can temporarily patch settings.ensure_agent_dir
-    
+    # Monkeypatch settings to force local directories
     original_ensure_agent_dir = settings.ensure_agent_dir
     original_ensure_user_skills_dir = settings.ensure_user_skills_dir
-    
+
     def mock_ensure_agent_dir(name):
         return agent_dir
-        
+
     def mock_ensure_user_skills_dir(name):
         return skills_dir
-        
+
     settings.ensure_agent_dir = mock_ensure_agent_dir
     settings.ensure_user_skills_dir = mock_ensure_user_skills_dir
 
     try:
-        agent_middleware = [
-            AgentMemoryMiddleware(settings=settings, assistant_id=assistant_id),
-        ]
-        
+        # Prepare tools
+        tools = []
         if enable_tools:
-            workspace_dir = Path.cwd() / "workspace"
-            workspace_dir.mkdir(exist_ok=True)
-            
-            agent_middleware.extend([
-                SkillsMiddleware(
-                    skills_dir=skills_dir,
-                    assistant_id=assistant_id,
-                    project_skills_dir=project_skills_dir,
-                ),
-                ShellMiddleware(
-                    workspace_root=str(workspace_dir),
-                    env=os.environ,
-                ),
-            ])
+            tools = [http_request, fetch_url]
+            if settings.has_tavily:
+                tools.append(web_search)
+            # Add RAG tool
+            tools.append(search_knowledge_base)
+
+        # Prepare system prompt
+        if custom_system_prompt:
+            system_prompt = custom_system_prompt
+        else:
+            system_prompt = get_system_prompt(assistant_id=assistant_id)
+
+        # Intent recognition and fast path prompt injection
+        if enable_tools:
+            intent_prompt = """
+            CRITICAL INSTRUCTION: INTENT RECOGNITION AND FAST PATH
+            Before executing any plan or using tools, assess the user's intent.
+
+            1. SIMPLE CHAT / KNOWLEDGE QUERY:
+               If the user is asking for general knowledge, chatting, or asking a question that does NOT require:
+               - File system access
+               - Web search (unless you are unsure)
+               - Sub-agent delegation
+               - Complex planning
+
+               THEN: Do NOT use the 'write_todos' tool. Do NOT use any other tools.
+               Respond DIRECTLY to the user in the conversation. This ensures a fast response.
+
+            2. COMPLEX TASK / TOOL USE:
+               Only if the user's request clearly requires actions (creating files, reading files, researching specific recent info),
+               then proceed with the standard planning and tool use flow (write_todos, etc.).
+
+            Override default behavior: You do NOT need to write a todo list for simple conversation or questions.
+            """
+            system_prompt = system_prompt + "\n\n" + intent_prompt
+        else:
+            system_prompt = system_prompt + "\n\nCRITICAL: You are in FAST CHAT mode. DO NOT use any tools. DO NOT write todos. Just answer the user directly."
+
+        # Create Agent using CLI factory
+        agent_graph, backend = create_cli_agent(
+            model=model,
+            assistant_id=assistant_id,
+            tools=tools,
+            system_prompt=system_prompt,
+            auto_approve=True,
+            enable_memory=True,
+            enable_skills=True,
+            enable_shell=enable_tools,
+            checkpointer=checkpointer
+        )
+
+        return agent_graph
+
     finally:
-        # Restore settings to avoid side effects if settings is a global singleton
-        settings.ensure_agent_dir = original_ensure_agent_dir
-        settings.ensure_user_skills_dir = original_ensure_user_skills_dir
-
-    if custom_system_prompt:
-        system_prompt = custom_system_prompt
-    else:
-        system_prompt = get_system_prompt(assistant_id=assistant_id)
-    
-    # Intent recognition and fast path prompt injection
-    if enable_tools:
-        intent_prompt = """
-        CRITICAL INSTRUCTION: INTENT RECOGNITION AND FAST PATH
-        Before executing any plan or using tools, assess the user's intent.
-        
-        1. SIMPLE CHAT / KNOWLEDGE QUERY:
-           If the user is asking for general knowledge, chatting, or asking a question that does NOT require:
-           - File system access
-           - Web search (unless you are unsure)
-           - Sub-agent delegation
-           - Complex planning
-           
-           THEN: Do NOT use the 'write_todos' tool. Do NOT use any other tools.
-           Respond DIRECTLY to the user in the conversation. This ensures a fast response.
-           
-        2. COMPLEX TASK / TOOL USE:
-           Only if the user's request clearly requires actions (creating files, reading files, researching specific recent info), 
-           then proceed with the standard planning and tool use flow (write_todos, etc.).
-           
-        Override default behavior: You do NOT need to write a todo list for simple conversation or questions.
-        """
-        system_prompt = system_prompt + "\n\n" + intent_prompt
-    else:
-        system_prompt = system_prompt + "\n\nCRITICAL: You are in FAST CHAT mode. DO NOT use any tools. DO NOT write todos. Just answer the user directly."
-
-    # Load Subagents from JSON
-    subagents_list = []
-    try:
-        if AGENTS_FILE.exists():
-            saved_agents = load_json_file(AGENTS_FILE)
-            for sa in saved_agents:
-                # Construct SubAgent dict
-                subagents_list.append({
-                    "name": sa.get('name'),
-                    "description": sa.get('desc') or sa.get('description') or "A specialized sub-agent",
-                    "system_prompt": sa.get('content') or sa.get('system_prompt') or "You are a helpful sub-agent.",
-                    "tools": [] # Subagents can have tools too
-                })
-            if subagents_list:
-                print(f"Loaded {len(subagents_list)} sub-agents: {[s['name'] for s in subagents_list]}")
-    except Exception as e:
-        print(f"Error loading subagents: {e}")
-
-    # Configure tools
-    agent_tools = []
-    if enable_tools:
-        # Add RAG tool
-        agent_tools.append(search_knowledge_base)
-
-    agent = create_deep_agent(
-        model=model,
-        system_prompt=system_prompt,
-        tools=agent_tools, 
-        backend=composite_backend,
-        middleware=agent_middleware,
-        subagents=subagents_list,
-        interrupt_on=None,
-        checkpointer=checkpointer
-    ).with_config(config)
-
-    return agent
+        pass
 
 @app.get('/sessions')
-def list_sessions():
-    return db_module.list_sessions_db()
+async def list_sessions():
+    return await db_module.list_sessions_db()
 
 @app.post('/sessions')
 async def create_session(req: Request):
@@ -824,13 +743,13 @@ async def create_session(req: Request):
         body = await req.json()
     except:
         body = {}
-    
+
     # Requirement: Backend must verify valid user input content for session creation
     if not body.get('message'):
         raise HTTPException(status_code=400, detail="Initial message required to create session")
 
-    sid = db_module.create_session_db(body)
-    
+    sid = await db_module.create_session_db(body)
+
     # Initialize runtime state
     sessions[sid] = {
         'id': sid,
@@ -846,7 +765,7 @@ async def rename_session(sid: str, req: Request):
     name = body.get('name')
     if not name:
         return {'error': 'Name is required'}
-    db_module.update_session_db(sid, name=name)
+    await db_module.update_session_db(sid, name=name)
     return {'ok': True}
 
 @app.delete('/sessions/batch')
@@ -856,32 +775,32 @@ async def delete_sessions_batch(req: Request):
         ids = body.get('ids', [])
         if not ids:
             return {'ok': True, 'count': 0}
-            
+
         # 1. Abort any running sessions in the list
         for sid in ids:
             if sid in sessions:
                 sessions[sid]['abort_signal'] = True
-        
+
         # 2. Delete from DB
         try:
-            db_module.delete_sessions_batch_db(ids)
+            await db_module.delete_sessions_batch_db(ids)
         except Exception as e:
             print(f"Error deleting batch sessions: {e}")
             raise HTTPException(status_code=500, detail=str(e))
-            
+
         # 3. Cleanup memory and disk
         for sid in ids:
             if sid in sessions:
                 del sessions[sid]
             # checkpointers cleanup removed as it's global now
-                
+
             agent_dir = DATA_DIR / "sessions" / sid
             if agent_dir.exists():
                 try:
                     shutil.rmtree(agent_dir)
                 except Exception as e:
                     print(f"Error deleting agent dir {agent_dir}: {e}")
-                    
+
         return {'ok': True, 'count': len(ids)}
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -895,7 +814,7 @@ async def delete_session(sid: str):
 
     # 2. Delete from DB
     try:
-        db_module.delete_session_db(sid)
+        await db_module.delete_session_db(sid)
     except Exception as e:
         print(f"Error deleting session {sid} from DB: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -903,10 +822,8 @@ async def delete_session(sid: str):
     # 3. Cleanup memory
     if sid in sessions:
         del sessions[sid]
-    if sid in checkpointers:
-        del checkpointers[sid]
 
-    # 4. Cleanup disk (Agent Directory)
+    # 4. Cleanup disk if exists (agent directory)
     agent_dir = DATA_DIR / "sessions" / sid
     if agent_dir.exists():
         try:
@@ -923,20 +840,20 @@ class MessageRequest(BaseModel):
 @app.post('/sessions/{sid}/messages')
 async def post_message(sid: str, req: MessageRequest):
     # Verify session exists
-    session_data = db_module.get_session_db(sid)
+    session_data = await db_module.get_session_db(sid)
     if not session_data:
         raise HTTPException(status_code=404, detail="Session not found")
-    
+
     # Update runtime state
     if sid not in sessions:
         sessions[sid] = {'id': sid, 'agent_cache': None, 'config': session_data.get('config', {})}
-    
+
     sessions[sid]['pending_input'] = req.content
     sessions[sid]['enable_tools'] = req.tools
-    
+
     # Save user message to DB
-    db_module.add_message_db(sid, 'user', req.content)
-    
+    await db_module.add_message_db(sid, 'user', req.content)
+
     # Auto-rename if first message (or name is default)
     current_name = session_data.get('name')
     if current_name == 'New Session' or current_name == f"Session {sid}":
@@ -944,8 +861,8 @@ async def post_message(sid: str, req: MessageRequest):
         new_name = req.content[:30]
         if len(req.content) > 30:
             new_name += "..."
-        db_module.update_session_db(sid, name=new_name)
-        
+        await db_module.update_session_db(sid, name=new_name)
+
     return {'ok': True}
 
 @app.get('/sessions/{sid}/status')
@@ -968,37 +885,37 @@ def abort_session(sid: str):
 @app.get('/sessions/{sid}/stream')
 async def stream_session(sid: str):
     # Ensure session loaded
-    session_db = db_module.get_session_db(sid)
+    session_db = await db_module.get_session_db(sid)
     if not session_db:
          raise HTTPException(status_code=404, detail="Session not found")
-         
+
     if sid not in sessions:
         sessions[sid] = {'id': sid, 'agent_cache': None, 'config': session_db.get('config', {})}
-        
+
     session = sessions[sid]
-    
+
     # Initialize StreamState if not present
     if 'stream_state' not in session:
         session['stream_state'] = StreamState()
-        
+
     stream_state = session['stream_state']
-    
+
     # Check if we need to start a new generation
     pending_input = session.get('pending_input')
-    
+
     if pending_input and stream_state.status != 'generating':
         # Prepare to start background task
-        
+
         # Reset stream state for new run
         session['stream_state'] = StreamState()
         stream_state = session['stream_state']
-        
+
         enable_tools = session.get('enable_tools', True)
         session['pending_input'] = None # Consume input
-        
+
         # Setup checkpointer
         cp = global_checkpointer
-        
+
         # Load history
         db_messages = session_db.get('messages', [])
         history_msgs = []
@@ -1014,7 +931,7 @@ async def stream_session(sid: str):
                 history_msgs.append(msg)
             elif role == 'tool':
                 history_msgs.append(ToolMessage(content=content, tool_call_id=m.get('tool_call_id')))
-                
+
         # Init Agent
         agent = _init_agent(
             assistant_id=sid,
@@ -1022,9 +939,9 @@ async def stream_session(sid: str):
             enable_tools=enable_tools,
             custom_system_prompt=session['config'].get('system_prompt')
         )
-        
+
         config = {"configurable": {"thread_id": sid}, "recursion_limit": 150}
-        
+
         # Start Background Task
         stream_state.task = asyncio.create_task(
             background_generator(sid, agent, history_msgs, config, stream_state, sessions)
@@ -1037,14 +954,14 @@ async def stream_session(sid: str):
 
     # Subscribe to the stream (whether new or existing)
     queue = stream_state.add_listener()
-    
+
     async def event_generator():
         try:
             while True:
                 # Wait for event
                 event = await queue.get()
                 yield event
-                
+
                 # Check if done
                 try:
                     if event.startswith("data: "):
@@ -1059,23 +976,23 @@ async def stream_session(sid: str):
             pass
         finally:
             stream_state.remove_listener(queue)
-            
+
     return StreamingResponse(event_generator(), media_type="text/event-stream")
 
 @app.get('/sessions/{sid}/context')
 async def get_session_context(sid: str):
-    session = db_module.get_session_db(sid)
+    session = await db_module.get_session_db(sid)
     if not session:
          return JSONResponse({'error': 'Session not found'}, status_code=404)
-    
+
     return {
         'history': session.get('messages', []),
         'logs_count': len(session.get('logs', []))
     }
 
 @app.get('/sessions/{sid}/export')
-def export_session(sid: str):
-    session = db_module.get_session_db(sid)
+async def export_session(sid: str):
+    session = await db_module.get_session_db(sid)
     if not session:
          raise HTTPException(404, "Session not found")
     messages = session.get('messages', [])
@@ -1092,55 +1009,55 @@ def export_session(sid: str):
     return export_data
 
 @app.post('/sessions/migrate')
-def migrate_sessions():
+async def migrate_sessions():
     sessions_dir = DATA_DIR / "sessions"
     count = 0
     if not sessions_dir.exists():
         return {"migrated": 0, "msg": "No sessions directory found"}
-        
+
     for f in sessions_dir.glob("*.json"):
         try:
             # Skip already migrated files if renamed (though we rename to .json.migrated which won't match *.json)
             data = json.loads(f.read_text(encoding='utf-8'))
             sid = data.get('id', f.stem)
-            
+
             # Check if exists
-            if db_module.get_session_db(sid):
+            if await db_module.get_session_db(sid):
                 continue
-                
+
             # Create session
             config = data.get('config', {})
             name = data.get('name', f"Session {sid}")
-            # Ensure created_at matches original if possible? 
+            # Ensure created_at matches original if possible?
             # db module uses current time. We could modify db module to accept created_at but let's keep it simple.
-            
-            db_module.create_session_db(config, sid=sid, name=name)
-            
+
+            await db_module.create_session_db(config, sid=sid, name=name)
+
             # Add messages
             for msg in data.get('messages', []):
                 role = msg.get('role', 'user')
                 content = msg.get('content', '')
                 tool_calls = msg.get('tool_calls')
                 tool_call_id = msg.get('tool_call_id')
-                
-                # If tool_calls is string (old format?), parse it? 
+
+                # If tool_calls is string (old format?), parse it?
                 # Assuming standard format
-                
-                db_module.add_message_db(sid, role, content, tool_calls=tool_calls, tool_call_id=tool_call_id)
-                
+
+                await db_module.add_message_db(sid, role, content, tool_calls=tool_calls, tool_call_id=tool_call_id)
+
             # Add logs
             for log in data.get('logs', []):
                 content = log.get('content', '') if isinstance(log, dict) else str(log)
-                db_module.add_log_db(sid, content)
-                
+                await db_module.add_log_db(sid, content)
+
             count += 1
             # Rename file to mark as migrated
             try:
                 f.rename(f.with_suffix('.json.migrated'))
             except:
                 pass # Might fail on windows if open
-            
+
         except Exception as e:
             print(f"Failed to migrate {f}: {e}")
-            
+
     return {"migrated": count}

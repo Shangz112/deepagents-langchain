@@ -32,11 +32,11 @@ def strict_project_validator(path: Path) -> bool:
     try:
         resolved = path.resolve()
         cwd = Path.cwd().resolve()
-        
+
         # 1. Allow paths within current working directory (project root)
         if resolved.is_relative_to(cwd):
             return True
-            
+
         # 2. Allow paths within assemble_agents
         # Search up for libs/assemble_agents
         root = cwd
@@ -45,11 +45,11 @@ def strict_project_validator(path: Path) -> bool:
             if assemble_agents.exists():
                 if resolved.is_relative_to(assemble_agents.resolve()):
                     return True
-            
-            if (root / ".git").exists(): 
+
+            if (root / ".git").exists():
                 break
             root = root.parent
-            
+
         return False
     except Exception:
         return False
@@ -136,7 +136,7 @@ class FilesystemBackend(BackendProtocol):
 
                 Files exceeding this limit are skipped during search. Defaults to 10 MB.
             path_validator: Optional callback to validate resolved paths.
-                
+
                 If provided, this function is called with the resolved absolute path.
                 If it returns False, a ValueError is raised.
         """
@@ -183,10 +183,10 @@ class FilesystemBackend(BackendProtocol):
             resolved = path
         else:
             resolved = (self.cwd / path).resolve()
-            
+
         if self.path_validator and not self.path_validator(resolved):
             raise ValueError(f"Path not allowed by validator: {resolved}")
-            
+
         return resolved
 
     def ls_info(self, path: str) -> list[FileInfo]:
@@ -320,22 +320,38 @@ class FilesystemBackend(BackendProtocol):
         try:
             # Open with O_NOFOLLOW where available to avoid symlink traversal
             fd = os.open(resolved_path, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0))
+
+            # Check for empty file before reading
+            if os.fstat(fd).st_size == 0:
+                os.close(fd)
+                return "System reminder: File exists but has empty contents"
+
             with os.fdopen(fd, "r", encoding="utf-8") as f:
-                content = f.read()
+                # Stream reading to avoid loading large files into memory
 
-            empty_msg = check_empty_content(content)
-            if empty_msg:
-                return empty_msg
+                # Skip lines up to offset
+                current_line_idx = 0
+                for _ in range(offset):
+                    try:
+                        next(f)
+                        current_line_idx += 1
+                    except StopIteration:
+                        return f"Error: Line offset {offset} exceeds file length ({current_line_idx} lines)"
 
-            lines = content.splitlines()
-            start_idx = offset
-            end_idx = min(start_idx + limit, len(lines))
+                # Read up to limit lines
+                selected_lines = []
+                for _ in range(limit):
+                    try:
+                        line = next(f)
+                        # Strip trailing newline as format_content_with_line_numbers adds its own
+                        selected_lines.append(line.rstrip('\n'))
+                    except StopIteration:
+                        break
 
-            if start_idx >= len(lines):
-                return f"Error: Line offset {offset} exceeds file length ({len(lines)} lines)"
+                if not selected_lines and limit > 0:
+                    return f"Error: Line offset {offset} exceeds file length ({offset} lines)"
 
-            selected_lines = lines[start_idx:end_idx]
-            return format_content_with_line_numbers(selected_lines, start_line=start_idx + 1)
+                return format_content_with_line_numbers(selected_lines, start_line=offset + 1)
         except (OSError, UnicodeDecodeError) as e:
             return f"Error reading file '{file_path}': {e}"
 

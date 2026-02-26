@@ -12,26 +12,26 @@ sys.path.insert(0, r"d:/MASrepos/deepagents-langchain/libs/deepagents-web/servic
 os.environ["SILICONFLOW_API_KEY"] = "mock_key"
 
 import db as db_module
-from app import sessions
+# from app import sessions # Removed to avoid importing app and triggering its side effects if any
 
-def test_persistence():
+async def test_persistence():
     print("Initializing DB...")
-    db_module.init_db()
+    await db_module.init_db()
     
     # 1. Create Session
     print("Creating session...")
     config = {"system_prompt": "You are a test agent."}
-    sid = db_module.create_session_db(config, name="Test Persistence Session")
+    sid = await db_module.create_session_db(config, name="Test Persistence Session")
     print(f"Session created: {sid}")
     
     # 2. Add Messages
     print("Adding messages...")
-    db_module.add_message_db(sid, "user", "Hello World")
-    db_module.add_message_db(sid, "assistant", "Hi there!")
+    await db_module.add_message_db(sid, "user", "Hello World")
+    await db_module.add_message_db(sid, "assistant", "Hi there!")
     
     # 3. Verify in DB
     print("Verifying DB content...")
-    session = db_module.get_session_db(sid)
+    session = await db_module.get_session_db(sid)
     if not session:
         print("ERROR: Session not found in DB immediately after creation.")
         return
@@ -45,14 +45,10 @@ def test_persistence():
         
     # 4. Simulate Restart (Clear memory)
     print("Simulating restart (clearing memory)...")
-    # In app.py, sessions is a global dict. 
-    # We can't easily modify the imported 'sessions' variable effectively if app.py uses it internally,
-    # but db_module is independent of app.sessions.
-    # The point is: can we retrieve it from DB without relying on memory?
     
     # 5. Retrieve again
     print("Retrieving after 'restart'...")
-    session_restored = db_module.get_session_db(sid)
+    session_restored = await db_module.get_session_db(sid)
     if not session_restored:
         print("ERROR: Session lost after restart simulation!")
     else:
@@ -62,7 +58,7 @@ def test_persistence():
 
     # 6. List sessions
     print("Listing sessions...")
-    all_sessions = db_module.list_sessions_db()
+    all_sessions = await db_module.list_sessions_db()
     found = False
     for s in all_sessions:
         if s['id'] == sid:
@@ -76,8 +72,8 @@ def test_persistence():
         print("List verified.")
 
     # Cleanup
-    # db_module.delete_session_db(sid)
+    # await db_module.delete_session_db(sid)
     # print("Cleanup done.")
 
 if __name__ == "__main__":
-    test_persistence()
+    asyncio.run(test_persistence())
